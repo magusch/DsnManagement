@@ -149,8 +149,7 @@ class Events2PostAdmin(admin.ModelAdmin):
         return f'{base_url}?{query_string}'
 
     class Media:
-        pass
-        # js = ('admin.js')
+        js = ['admin.js']
 
     def markdown_post_view(self, instance):
         html_image = f"<div style='width:325px;'><img src='{instance.image}' width='325px'>"
