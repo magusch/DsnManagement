@@ -283,6 +283,7 @@ class Parameter(models.Model):  # Table events for posting
     parameter_name = models.CharField(max_length=500)
     value = models.CharField(max_length=500)
     commentary = models.CharField(max_length=500, null=True)
+    full_value = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return (self.site + self.parameter_name)
