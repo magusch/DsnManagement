@@ -325,3 +325,15 @@ def channel_api_request(data):
         response = requests.get(url, headers=headers)
 
     return response
+
+
+def moderate_not_approved_events(event_ids):
+    data = {
+        "api_url": "api/ai_moderate_not_approved_events",
+        "method": "POST",
+        "data": {"ids": event_ids}
+    }
+    response = channel_api_request(data)
+
+    if response.status_code == 200:
+        return True

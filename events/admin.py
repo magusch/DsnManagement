@@ -27,7 +27,7 @@ class EventsAdmin(admin.ModelAdmin):
     list_display = ["title", "approved", "from_date_color", open_url, "was_old"]
     list_filter = ["from_date", "explored_date"]
     search_fields = ["title", "post"]
-    actions = ["approve_event"]
+    actions = ["approve_event", "moderate_events"]
     ordering = ["-explored_date", "-from_date"]
     readonly_fields = ('image_tag',)
 
@@ -44,6 +44,32 @@ class EventsAdmin(admin.ModelAdmin):
             messages.SUCCESS,
         )
         utils.move_event_to_post(self.model)
+
+    def moderate_events(self, request, queryset):
+        ids = list(queryset.values_list('id', flat=True))
+        answer = utils.moderate_not_approved_events(ids)
+        if answer:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event was successfully added for moderation AI process.",
+                    "%d events were successfully added for moderation AI process.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event wasn't added for moderation AI process.",
+                    "%d events weren't added for moderation AI process.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.ERROR,
+            )
 
     def image_tag(self, obj):
         if obj.image_upload:
