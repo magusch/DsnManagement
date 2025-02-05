@@ -1,5 +1,8 @@
-from typing import Generator, List
+import os, json
 import datetime, re
+import requests
+
+from typing import Generator, List
 
 from django.utils import timezone
 from django.forms.models import model_to_dict
@@ -7,6 +10,10 @@ from django.forms.models import model_to_dict
 from .models import Events2Post, PostingTime, Event
 
 from .helper.post_helper import PostHelper
+
+
+CHANNEL_API_URL = os.environ.get("CHANNEL_API_URL")
+CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
 
 current_tz = timezone.get_current_timezone()
 
@@ -301,3 +308,20 @@ def make_a_post_text(event, save=0):
             remake_event_data['main_category'] = main_category
     
     return remake_event_data
+
+
+def channel_api_request(data):
+    url = CHANNEL_API_URL + data['api_url']
+    headers = {
+        'Authorization': f"Bearer {CHANNEL_API_TOKEN}",
+        'Content-Type': 'application/json'
+    }
+
+    if data['method'] == 'POST':
+        response = requests.post(url, headers=headers, data=json.dumps(data['data']))
+    elif data['method'] == 'GET':
+        response = requests.get(url, headers=headers)
+    else:
+        response = requests.get(url, headers=headers)
+
+    return response

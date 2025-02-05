@@ -81,6 +81,7 @@ class Events2PostAdmin(admin.ModelAdmin):
     actions = [
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
+        "change_status_to_Posted",
         "clear_post_time",
         "change_queue",
         'update_post_text_for_posting',
@@ -179,6 +180,19 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     def change_status_to_Spam(self, request, queryset):
         updated = queryset.update(status="Spam")
+        self.message_user(
+            request,
+            ngettext(
+                "%d event was changed on Spam.",
+                "%d events were changed on Spam.",
+                updated,
+            )
+            % updated,
+            messages.SUCCESS,
+        )
+
+    def change_status_to_Posted(self, request, queryset):
+        updated = queryset.update(status="Posted")
         self.message_user(
             request,
             ngettext(

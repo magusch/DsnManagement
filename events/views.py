@@ -1,5 +1,4 @@
-import os, json
-import requests
+import json
 
 import markdown
 
@@ -16,9 +15,6 @@ from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post
 from . import utils
 
 from .helper.open_ai_helper import OpenAIHelper
-
-CHANNEL_API_URL = os.environ.get("CHANNEL_API_URL")
-CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
 
 
 def event_post_html(request, event_id):
@@ -102,7 +98,6 @@ def remove_old_events(request):
 @staff_member_required
 def fill_empty_post_time(request):
     if request.method == "POST":
-        print("")
         response = None
         #utils.refresh_posting_time(request=request)
 
@@ -266,17 +261,9 @@ def proxy_request_to_channel_api(request):
     if request.method == "POST":
 
         data = json.loads(request.body)
-        url = CHANNEL_API_URL + data['api_url']
-        headers = {
-            'Authorization': f"Bearer {CHANNEL_API_TOKEN}",
-            'Content-Type': 'application/json'
-        }
+        response = utils.channel_api_request(data)
 
-        if data['method'] == 'POST':
-            response = requests.post(url, headers=headers, data=json.dumps(data['data']))
-            return JsonResponse(response.json(), status=response.status_code)
-        elif data['method'] == 'GET':
-            response = requests.get(url, headers=headers)
+        if response:
             return JsonResponse(response.json(), status=response.status_code)
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
