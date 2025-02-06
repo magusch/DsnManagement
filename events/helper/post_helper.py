@@ -65,9 +65,9 @@ class PostHelper:
 
         full_title = f"*{title_date}* {title}\n\n"
 
-        if self.event.prepared_text is None and self.event.full_text is None:
+        if not self.event.prepared_text and not self.event.full_text :
             post_text = self.event.post
-        elif self.event.prepared_text is None:
+        elif not self.event.prepared_text:
             post_text = self.reduce_text(self.event.full_text)
         else:
             post_text = self.reduce_text(self.event.prepared_text)
