@@ -123,6 +123,7 @@
                 place_id: document.getElementById('id_place').value,
                 title: document.getElementById('id_title').value,
                 full_text: document.getElementById('id_full_text').value,
+                prepared_text: document.getElementById('id_prepared_text').value,
                 url: document.getElementById('id_url').value,
                 price: document.getElementById('id_price').value,
                 address: document.getElementById('id_address').value,
@@ -175,7 +176,8 @@
                         }, interval_sec);
                     },
                     error: function(xhr, status, error) {
-                        console.error(error);
+                        console.error(`There is error on ChannelBot server: ${error}. Run local`);
+                        remakePostByAi();
                     }
                 });
 
@@ -335,15 +337,19 @@
 </form></div>
     <script>
     document.getElementsByClassName('form-row field-full_text')[0].style.display = "none";
+    document.getElementsByClassName('form-row field-prepared_text')[0].style.display = "none";
 
     function hideFullText() {
             var fullText = document.getElementsByClassName('form-row field-full_text')[0];
+            var preparedText = document.getElementsByClassName('form-row field-prepared_text')[0];
             var button = document.getElementById('hide_full_text');
             if (fullText.style.display === "none") {
                 fullText.style.display = "block";
+                preparedText.style.display = "block";
                 button.innerHTML = 'Hide full text';
             } else {
                 fullText.style.display = "none";
+                preparedText.style.display = "none";
                 button.innerHTML = 'Show full text';
             }
         }

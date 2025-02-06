@@ -138,6 +138,7 @@ class Events2Post(models.Model):  # Table events for posting
     is_ready = models.BooleanField(default=False)
     title = models.CharField(max_length=500)
     post = models.TextField(default=default_post_text, blank=True)
+    prepared_text = models.TextField(default="", blank=True, null=True)
     full_text = models.TextField(default="", blank=True, null=True)
     image = models.CharField(max_length=500, blank=True, null=True)
     image_upload = models.ImageField(upload_to='event_images/', blank=True, null=True)

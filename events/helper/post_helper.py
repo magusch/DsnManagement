@@ -65,10 +65,12 @@ class PostHelper:
 
         full_title = f"*{title_date}* {title}\n\n"
 
-        if self.event.full_text is None:
+        if self.event.prepared_text is None and self.event.full_text is None:
             post_text = self.event.post
+        elif self.event.prepared_text is None:
+            post_text = self.reduce_text(self.event.full_text)
         else:
-            post_text = self.reduce_text()
+            post_text = self.reduce_text(self.event.prepared_text)
 
         post_text = (
             post_text.strip()
@@ -212,8 +214,7 @@ class PostHelper:
             subcategory, created = SubCategory.objects.get_or_create(name=self.event.category)
             return subcategory.category
 
-    def reduce_text(self):
-        post_text = self.event.full_text
+    def reduce_text(self, post_text):
         if len(post_text) > 550:
             sentences = post_text.split(".")
             post = ""

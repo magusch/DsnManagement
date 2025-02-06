@@ -161,6 +161,7 @@ def move_event_to_post(Events_model):
         event_dict = model_to_dict(event, fields=event2post_list)
         # make post in transfering
         ev = make_a_post_text(event_dict)
+        event_dict['prepared_text'] = event_dict['post']
         event_dict['post'] = ev['post']
         event_dict['place_id'] = ev['place'] if ev['place'] is not None else (event.place.id if event.place is not None else None)
         if 'main_category' in ev:
