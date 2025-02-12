@@ -338,3 +338,15 @@ def moderate_not_approved_events(event_ids):
 
     if response.status_code == 200:
         return True
+
+
+def prepare_events(event_ids):
+    data = {
+        "api_url": "api/prepare_events",
+        "method": "POST",
+        "data": {"ids": event_ids}
+    }
+    response = channel_api_request(data)
+
+    if response.status_code == 200:
+        return True

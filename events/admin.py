@@ -108,12 +108,13 @@ class Events2PostAdmin(admin.ModelAdmin):
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
         "change_status_to_Posted",
-        "clear_post_time",
+        "prepare_events",
+        #"clear_post_time",
         "change_queue",
-        'update_post_text_for_posting',
+        #'update_post_text_for_posting',
         'transfer_events_to_site',
         utils.post_date_order_by_queue,
-        utils.refresh_posting_time,
+        #utils.refresh_posting_time,
         'text_post_check'
     ]
     admin.ModelAdmin.save_on_top = True
@@ -291,6 +292,31 @@ class Events2PostAdmin(admin.ModelAdmin):
         )
 
 
+    def prepare_events(self, request, queryset):
+        ids = list(queryset.values_list('id', flat=True))
+        answer = utils.prepare_events(ids)
+        if answer:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event was successfully added for preparing to post.",
+                    "%d events were successfully added for preparing to post.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event wasn't added for preparing to post.",
+                    "%d events weren't added for preparing to post.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.ERROR,
+            )
 
 
 weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
