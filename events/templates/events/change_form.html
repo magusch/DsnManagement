@@ -24,7 +24,7 @@
 {% endif %}
 
 {% block content %}<div id="content-main">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
 <script>
 
         {% if original.id %}
@@ -210,32 +210,6 @@
                 });
             });
         }
-
-
-        (function ($) {
-            $(document).ready(function () {
-                $('.place-autocomplete').on('input', function () {
-                    let query = $(this).val();
-                    if (query.length>1) {
-                        $.get('/place/place-autocomplete/', {query: query}, function (data) {
-                            let resultsDiv = $('#place-autocomplete-results');
-                            resultsDiv.empty();
-                            data.results.forEach(function (result) {
-                                resultsDiv.append('<div><a href="#" data-id="' + result.id + '">' + result.place_name + '</a></div>');
-                            });
-                        });
-                    }
-                });
-
-                $('#place-autocomplete-results').on('click', 'a', function (e) {
-                    e.preventDefault();
-                    let placeId = $(this).data('id');
-                    let placeName = $(this).text();
-                    $('.place-autocomplete').val(placeName);
-                    $('#id_place').val(placeId);
-                });
-            });
-        })(django.jQuery);
 
 
         function return_initial_event() {

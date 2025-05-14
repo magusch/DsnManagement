@@ -92,6 +92,10 @@ class Events2PostAdminForm(forms.ModelForm):
 class Events2PostAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_approved.html"
     change_form_template = "events/change_form.html"
+
+    class Media:
+        js = ('admin_place_searching.js',)
+
     list_display = [
         "title",
         "queue",
@@ -175,9 +179,6 @@ class Events2PostAdmin(admin.ModelAdmin):
         query_params['status__exact'] = 'ReadyToPost'
         query_string = urlencode(query_params, doseq=True)
         return f'{base_url}?{query_string}'
-
-    class Media:
-        js = ['admin.js']
 
     def markdown_post_view(self, instance):
         html_image = f"<div style='width:325px;'><img src='{instance.image}' width='325px'>"

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.core.exceptions import ValidationError
+from django.utils.html import format_html
 from .models import Place, PlaceKeyword, TestEventPlace, PlaceSchedule
 
 from datetime import timedelta
@@ -101,7 +101,17 @@ class PlaceScheduleAdmin(admin.ModelAdmin):
             f"Успешно продублировано {len(duplicates)} расписаний!"
         )
 
+class PlaceKeywordAdmin(admin.ModelAdmin):
+    readonly_fields = ('place_searching',)
+
+    class Media:
+        js = ('admin_place_searching.js',)
+
+    def place_searching(self, obj):
+        return format_html('<input type="text" class="place-autocomplete" /></input>'
+                           '<div id="place-autocomplete-results" class="form-row"></div>')
+
 
 admin.site.register(Place, PlaceAdmin)
-admin.site.register(PlaceKeyword)
+admin.site.register(PlaceKeyword, PlaceKeywordAdmin)
 admin.site.register(PlaceSchedule, PlaceScheduleAdmin)
