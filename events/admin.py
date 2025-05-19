@@ -1,8 +1,8 @@
 from django.contrib import admin, messages
 from django.utils.translation import ngettext
 from django.utils.html import format_html
-
 from django.utils.http import urlencode
+from django.utils import timezone
 
 import markdown
 
@@ -21,11 +21,32 @@ def open_url(obj):
 open_url.short_description = "URL"
 
 
+class FromDateFilter(admin.SimpleListFilter):
+    title = 'From Date field'
+    parameter_name = 'from_date_field'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('date_from_tomorrow',    'Date from tomorrow'),
+            ('date_from_today_3days', 'Date from today + 3 days'),
+            ('date_from_today_1week', 'Date from today + 1 week'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'date_from_tomorrow':
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=1)))
+        if self.value() == 'date_from_today_3days':
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=3)))
+        if self.value() == 'date_from_today_1week':
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=7)))
+        return queryset
+
+
 class EventsAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_not_approved.html"
 
-    list_display = ["title", "approved", "from_date_color", open_url, "was_old"]
-    list_filter = ["from_date", "explored_date"]
+    list_display = ["title", "approved", "from_date_order", open_url, "was_old"]
+    list_filter = [FromDateFilter, "explored_date"]
     search_fields = ["title", "post"]
     actions = ["approve_event", "moderate_events"]
     ordering = ["-explored_date", "-from_date"]
@@ -44,6 +65,11 @@ class EventsAdmin(admin.ModelAdmin):
             messages.SUCCESS,
         )
         utils.move_event_to_post(self.model)
+
+    def from_date_order(self, obj):
+        return obj.from_date_color()
+
+    from_date_order.admin_order_field = 'from_date'
 
     def moderate_events(self, request, queryset):
         ids = list(queryset.values_list('id', flat=True))
