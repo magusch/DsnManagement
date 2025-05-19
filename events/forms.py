@@ -9,11 +9,13 @@ class EventAddForm(forms.ModelForm):
             'image_upload', 'from_date', 'to_date',
             'place', 'price']
         widgets = {
-            'title': forms.TextInput(attrs={'class': 'form-control'}),
+            'title':     forms.TextInput(attrs={'class': 'form-control'}),
             'full_text': forms.Textarea(attrs={'class': 'form-control'}),
-            'address': forms.TextInput(attrs={'class': 'form-control'}),
-            'place': forms.Select(attrs={'class': 'form-control'}),
-            'price': forms.TextInput(attrs={'class': 'form-control'}),
+            'address':   forms.TextInput(attrs={'class': 'form-control'}),
+            'place':     forms.Select(attrs={'class': 'form-control'}),
+            'price':     forms.TextInput(attrs={'class': 'form-control'}),
+            'from_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
+            'to_date':   forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
         }
 
         def clean_image_upload(self):
