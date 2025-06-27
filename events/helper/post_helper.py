@@ -1,4 +1,4 @@
-import re
+import re, os
 
 from place.utils import address_from_places, place_orm_object
 
@@ -10,6 +10,7 @@ import pytz
 
 from datetime import datetime
 
+TELEGRAM_BOT_NAME = os.environ.get("TELEGRAM_BOT_NAME", None)
 
 class PostHelper:
     def __init__(self, event):
@@ -84,12 +85,17 @@ class PostHelper:
         footer_link = self.param_manager.get_parameter('finish_link')
         if not footer_link: footer_link = ''
 
+        remind_link = ''
+        if TELEGRAM_BOT_NAME is not None:
+            remind_link = f"|| [Сохранить в боте](https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id})"
+
+
         footer = (
             "\n\n"
             f"*Где:* {address_line}\n"
             f"*Когда:* {date_from_to} \n"
             f"*Вход:* [{self.event.price}]({self.event.url})"
-            f"\n\n{footer_link}"
+            f"\n\n{footer_link} {remind_link}"
         )
 
         full_post = (full_title + post_text.strip() + footer).strip()
