@@ -86,7 +86,7 @@ class PostHelper:
         if not footer_link: footer_link = ''
 
         remind_link = ''
-        if TELEGRAM_BOT_NAME is not None:
+        if TELEGRAM_BOT_NAME is not None and hasattr(self.event, 'id'):
             remind_link = f"|| [Сохранить в боте](https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id})"
 
 
