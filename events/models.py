@@ -130,6 +130,8 @@ def last_queue():
     q = Events2Post.objects.order_by("-queue").first()
     if q:
         return q.queue + 2
+    else:
+        return 1
 
 
 class Events2Post(models.Model):  # Table events for posting
