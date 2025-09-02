@@ -7,7 +7,7 @@ from datetime import timedelta
 
 class PlaceScheduleInline(admin.TabularInline):
     model = PlaceSchedule
-    extra = 5
+    extra = 0
     fields = ('schedule_type', 'weekday', 'date', 'open_time', 'close_time')
     ordering = ['weekday', 'date']
     verbose_name = "Schedule"
@@ -100,6 +100,7 @@ class PlaceScheduleAdmin(admin.ModelAdmin):
             request,
             f"Успешно продублировано {len(duplicates)} расписаний!"
         )
+
 
 class PlaceKeywordAdmin(admin.ModelAdmin):
     readonly_fields = ('place_searching',)

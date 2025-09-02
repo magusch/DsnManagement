@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
 
 
 class Place(models.Model):
@@ -81,6 +82,7 @@ WEEKDAYS = [
     (6, _("Sunday"))
 ]
 
+
 class PlaceSchedule(models.Model):
     SCHEDULE_TYPES = [
         ('std', 'Standard'),
@@ -94,6 +96,21 @@ class PlaceSchedule(models.Model):
     date = models.DateField(blank=True, null=True)
     open_time = models.TimeField(null=True, blank=True, default='10:00:00')
     close_time = models.TimeField(null=True, blank=True, default='18:00:00')
+
+    def clean(self):
+        if self.schedule_type == 'std':
+            if self.date is not None or self.weekday is None:
+                raise ValidationError("Standard расписание: date должно быть пустым, а weekday заполнен.")
+        elif self.schedule_type == 'spl':
+            if self.date is None or self.weekday is not None:
+                raise ValidationError("Special расписание: date должно быть заполнено, а weekday пустым.")
+        elif self.schedule_type == 'hol':
+            if self.weekday is not None:
+                raise ValidationError("Holiday расписание: weekday должно быть пустым.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        return super().save(*args, **kwargs)
 
     class Meta:
         constraints = [
