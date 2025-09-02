@@ -18,7 +18,7 @@ CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
 current_tz = timezone.get_current_timezone()
 
 current_tz_int = (
-    timezone.get_default_timezone().normalize(timezone.now()).hour - timezone.now().hour
+    timezone.now().hour - timezone.now().hour
 )
 if current_tz_int<0: current_tz_int=24+current_tz_int
 
@@ -127,7 +127,7 @@ def last_post_date():
     if last_post_event:
         last_queue = Events2Post.objects.order_by("-queue").first().queue
         try:
-            post_time = good_post_time(current_tz.normalize(last_post_event.post_date))
+            post_time = good_post_time(last_post_event.post_date)
         except:
             post_time = good_post_time(timezone.now())
         return post_time, last_queue + 2

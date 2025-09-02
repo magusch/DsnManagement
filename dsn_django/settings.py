@@ -28,9 +28,12 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 debug_string = os.environ.get("DEBUG_BOOL", 'False')
 DEBUG = False if debug_string == "False" else True
 
+CSRF_TRUSTED_ORIGINS = [
+ 'http://localhost:8080', '*'
+]
 ALLOWED_HOSTS = ["*"]
 
-
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Application definition
 
 INSTALLED_APPS = [
