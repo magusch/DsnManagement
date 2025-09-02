@@ -29,7 +29,7 @@ debug_string = os.environ.get("DEBUG_BOOL", 'False')
 DEBUG = False if debug_string == "False" else True
 
 CSRF_TRUSTED_ORIGINS = [
- 'http://localhost:8080', '*'
+ 'http://localhost:8080',
 ]
 ALLOWED_HOSTS = ["*"]
 
