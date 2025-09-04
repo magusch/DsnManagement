@@ -44,6 +44,7 @@ class EventsNotApprovedNew(models.Model):
     image = models.CharField(max_length=500, blank=True, null=True)
     url = models.CharField(max_length=500, blank=True)
     price = models.CharField(max_length=500, blank=True)
+    price_int = models.IntegerField(null=True, blank=True)
     category = models.CharField(max_length=500, null=True, blank=True)
     address = models.CharField(max_length=500, blank=True)
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
@@ -85,6 +86,7 @@ class EventsNotApprovedProposed(models.Model):
     image = models.CharField("Ссылка на изображение", max_length=500, blank=True, null=True)
     url = models.CharField("Ссылка на мероприятие", max_length=500, blank=True)
     price = models.CharField("Цена", default="1000₽", max_length=500, blank=True)
+    price_int = models.IntegerField(null=True, blank=True)
     category = models.CharField("Категория (тип мероприятия)", max_length=500, null=True, blank=True)
     address = models.CharField("Адрес", max_length=500, blank=True)
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
@@ -153,6 +155,7 @@ class Events2Post(models.Model):  # Table events for posting
         db_index=True
     )
     price = models.CharField(max_length=150, blank=True)
+    price_int = models.IntegerField(null=True, blank=True)
     category = models.CharField(max_length=500, null=True, blank=True)
 
     main_category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True)
