@@ -29,4 +29,5 @@ urlpatterns = [
     path("check_posts/", views.check_posts, name="check_posts"),
 
     path('add-event/', views.EventAddView.as_view(), name='add_event'),
+    path('channel_api/', views.proxy_request_to_channel_api, name='channel_api')
 ]

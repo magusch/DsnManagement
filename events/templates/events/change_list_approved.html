@@ -3,8 +3,8 @@
 {% block object-tools %}
     <div>
         <a class="button" href="{% url 'fill_empty_post_time' %}">Fill posting time</a>
-        <a class="button" href="{% url 'count_events_by_day' %}">Count events by day</a>
-        <a class="button" href="?status__exact=ReadyToPost">Ready to post</a>
+{#        <a class="button" href="{% url 'count_events_by_day' %}">Count events by day</a>#}
+        <a class="button" href="{{ show_all_url }}" >  All Events</a>
         <a class="button" href="{% url 'transfer_posted_events_to_site' %}">Transfer events to site</a>
     </div>
     <br/>

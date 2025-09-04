@@ -1,11 +1,75 @@
 {% extends 'admin/change_list.html' %}
 
 {% block object-tools %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+    function toggleSelection() {
+        const selectionDiv = document.getElementById('siteSelection');
+        if (selectionDiv.style.display === "none") {
+            selectionDiv.style.display = "block";
+            document.getElementById('toggle_option').style.display = "none";
+        } else {
+            selectionDiv.style.display = "none";
+        }
+    }
+
+    let sites = []
+
+    function addItem(site) {
+            if (!sites.includes(site)){
+                sites.push(site);
+                document.getElementById(site).style.display = "none";
+            }
+        }
+
+    function eventsFromSites() {
+
+        //const selectedSites = Array.from(document.getElementById('sites').selectedOptions).map(option => option.value);
+        console.log(sites)
+            let data = {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                api_url: 'api/new_event_from_sites/',
+                method: 'POST',
+                data: {
+                    'sites': sites.length > 0 ? sites : null,
+                    'days': 7
+                },
+            };
+
+            $.ajax({
+                    url: '{% url 'channel_api' %}',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+
+                    }
+            })
+            const selectionDiv = document.getElementById('siteSelection');
+            selectionDiv.innerHTML  = "Request was sent. Wait 10-20 minutes";
+    }
+
+
+    </script>
+
     <div>
         <a class="button" href="{% url 'move_approved_events' %}">Move approved events</a>
         <a class="button" href="{% url 'remove_old_events' %}">Remove old events</a>
         <a class="button" href="{% url 'update_all' %}">Update all (move + delete)</a>
+         <a class="button" id="toggle_option" onclick="toggleSelection()">Request new events</a>
+
     </div>
+     <p><div id="siteSelection" style="display:none">
+            <a class="button" id="request_events" onclick="eventsFromSites()">Request events!</a>
+            <a class="button" id="mts" onclick="addItem('mts')">MTS event</a>
+            <a class="button" id="vk" onclick="addItem('vk')">vk event</a>
+            <a class="button" id="timepad" onclick="addItem('timepad')">timepad event</a>
+            <a class="button" id="qtickets" onclick="addItem('qtickets')">qtickets event</a>
+            <a class="button" id="radario" onclick="addItem('radario')">radario event</a>
+            <a class="button" id="ticketscloud" onclick="addItem('ticketscloud')">ticketscloud event</a>
+            <a class="button" id="culture" onclick="addItem('culture')">culture event</a>
+        </div>
+    </p>
     <br/>
     {{ block.super }}
 {% endblock %}

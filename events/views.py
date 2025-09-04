@@ -3,7 +3,7 @@ import json
 import markdown
 
 from django.utils import timezone
-from django.http import HttpResponse  # TODO: delete
+from django.http import HttpResponse, JsonResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -22,6 +22,7 @@ def event_post_html(request, event_id):
     # image = f"<img src='{event.image}'>"
     # html = image + markdown.markdown(event.post)
     return HttpResponse(event.markdown_post_view_model())
+
 
 def all_events(request):
     all_events = Events2Post.objects.filter(status="Posted")
@@ -97,7 +98,6 @@ def remove_old_events(request):
 @staff_member_required
 def fill_empty_post_time(request):
     if request.method == "POST":
-        print("")
         response = None
         #utils.refresh_posting_time(request=request)
 
@@ -131,6 +131,8 @@ def update_all(request):
 
     # Delete Old events from all tables
     remove_old_events(request)
+
+    utils.move_event_to_site(Events2Post)
 
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
@@ -253,7 +255,19 @@ def check_posts(request):
     return HttpResponse(answer)
 
 
-# views.py
+@csrf_exempt
+@staff_member_required
+def proxy_request_to_channel_api(request):
+    if request.method == "POST":
+
+        data = json.loads(request.body)
+        response = utils.channel_api_request(data)
+
+        if response:
+            return JsonResponse(response.json(), status=response.status_code)
+    else:
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
 
 from django.shortcuts import render, redirect
 from django.views import View
@@ -269,12 +283,13 @@ class EventAddView(View):
         return render(request, self.template_name, {'form': form})
 
     def post(self, request):
-        form = self.form_class(request.POST)
+        form = self.form_class(request.POST, request.FILES)
         today = timezone.now().date()
         events_today = EventsNotApprovedProposed.objects.filter(explored_date__date=today).count()
         if events_today >= 30:
             messages.error(request, 'Добавление мероприятий сегодня больше недоступно.')
             return redirect('add_event')
+
         if form.is_valid():
             event = form.save(commit=False)
             event.save()

@@ -1,5 +1,8 @@
-from typing import Generator, List
+import os, json
 import datetime, re
+import requests
+
+from typing import Generator, List
 
 from django.utils import timezone
 from django.forms.models import model_to_dict
@@ -8,10 +11,14 @@ from .models import Events2Post, PostingTime, Event
 
 from .helper.post_helper import PostHelper
 
+
+CHANNEL_API_URL = os.environ.get("CHANNEL_API_URL")
+CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
+
 current_tz = timezone.get_current_timezone()
 
 current_tz_int = (
-    timezone.get_default_timezone().normalize(timezone.now()).hour - timezone.now().hour
+    timezone.now().hour - timezone.now().hour
 )
 if current_tz_int<0: current_tz_int=24+current_tz_int
 
@@ -23,13 +30,13 @@ def _days_posting_times(time_point: datetime) -> Generator[None, List[datetime.d
     weekday = (
         PostingTime.objects.filter(start_weekday__lte=0)
         .filter(end_weekday__gte=4)
-        .order_by("posting_time_hours")
+        .order_by("posting_time__hour")
         .first()
     )
     weekend = (
         PostingTime.objects.filter(start_weekday__lte=5)
         .filter(end_weekday__gte=6)
-        .order_by("posting_time_hours")
+        .order_by("posting_time__hour")
         .first()
     )
 
@@ -120,7 +127,7 @@ def last_post_date():
     if last_post_event:
         last_queue = Events2Post.objects.order_by("-queue").first().queue
         try:
-            post_time = good_post_time(current_tz.normalize(last_post_event.post_date))
+            post_time = good_post_time(last_post_event.post_date)
         except:
             post_time = good_post_time(timezone.now())
         return post_time, last_queue + 2
@@ -153,9 +160,12 @@ def move_event_to_post(Events_model):
     for event in events:
         event_dict = model_to_dict(event, fields=event2post_list)
         # make post in transfering
+        event_dict['prepared_text'] = event_dict['post']
         ev = make_a_post_text(event_dict)
         event_dict['post'] = ev['post']
         event_dict['place_id'] = ev['place'] if ev['place'] is not None else (event.place.id if event.place is not None else None)
+        if 'main_category' in ev:
+            event_dict['main_category'] = ev['main_category']
 
         Events2Post.objects.create(
             status="ReadyToPost", post_date=post_date, queue=queue, **event_dict
@@ -207,13 +217,13 @@ def good_post_time(last_post_time):
     post_time_query_first = (
         PostingTime.objects.filter(start_weekday__lte=last_post_time.weekday())
         .filter(end_weekday__gte=last_post_time.weekday())
-        .filter(posting_time_hours__gte=last_post_time.hour + current_tz_int + 1)
-        .order_by('posting_time_hours').first()
+        .filter(posting_time__hour__gte=last_post_time.hour + current_tz_int + 1)
+        .order_by('posting_time__hour').first()
     )
     if post_time_query_first:
         post_time = last_post_time.replace(
-            hour=post_time_query_first.posting_time_hours - current_tz_int,
-            minute=post_time_query_first.posting_time_minutes,
+            hour=post_time_query_first.posting_time.hour - current_tz_int,
+            minute=post_time_query_first.posting_time.minute,
             second=0,
             microsecond=0,
         )
@@ -222,12 +232,12 @@ def good_post_time(last_post_time):
         post_time = (
             PostingTime.objects.filter(start_weekday__lte=next_day.weekday())
             .filter(end_weekday__gte=next_day.weekday())
-            .order_by("posting_time_hours")
+            .order_by("posting_time__hour")
             .first()
         )
         post_time = next_day.replace(
-            hour=post_time.posting_time_hours - current_tz_int,
-            minute=post_time.posting_time_minutes,
+            hour=post_time.posting_time.hour - current_tz_int,
+            minute=post_time.posting_time.minute,
             second=0,
             microsecond=0,
         )
@@ -289,9 +299,54 @@ def make_a_post_text(event, save=0):
         remaked_event = event.remake_post(save=save)
         remake_event_data['post'] = remaked_event['post']
         remake_event_data['place'] = remaked_event['place_id']
+        remake_event_data['main_category'] = remaked_event['main_category']
     elif type(event) == dict:
         post_helper = PostHelper(event)
         remake_event_data['post'] = post_helper.post_markdown()
         remake_event_data['place'] = post_helper.place_id()
+        main_category = post_helper.main_category()
+        if main_category is not None:
+            remake_event_data['main_category'] = main_category
     
     return remake_event_data
+
+
+def channel_api_request(data):
+    url = CHANNEL_API_URL + data['api_url']
+    headers = {
+        'Authorization': f"Bearer {CHANNEL_API_TOKEN}",
+        'Content-Type': 'application/json'
+    }
+
+    if data['method'] == 'POST':
+        response = requests.post(url, headers=headers, data=json.dumps(data['data']))
+    elif data['method'] == 'GET':
+        response = requests.get(url, headers=headers)
+    else:
+        response = requests.get(url, headers=headers)
+
+    return response
+
+
+def moderate_not_approved_events(event_ids):
+    data = {
+        "api_url": "api/ai_moderate_not_approved_events",
+        "method": "POST",
+        "data": {"ids": event_ids}
+    }
+    response = channel_api_request(data)
+
+    if response.status_code == 200:
+        return True
+
+
+def prepare_events(event_ids):
+    data = {
+        "api_url": "api/prepare_events",
+        "method": "POST",
+        "data": {"ids": event_ids}
+    }
+    response = channel_api_request(data)
+
+    if response.status_code == 200:
+        return True

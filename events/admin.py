@@ -1,6 +1,8 @@
 from django.contrib import admin, messages
 from django.utils.translation import ngettext
 from django.utils.html import format_html
+from django.utils.http import urlencode
+from django.utils import timezone
 
 import markdown
 
@@ -19,14 +21,36 @@ def open_url(obj):
 open_url.short_description = "URL"
 
 
+class FromDateFilter(admin.SimpleListFilter):
+    title = 'From Date field'
+    parameter_name = 'from_date_field'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('date_from_tomorrow',    'Date from tomorrow'),
+            ('date_from_today_3days', 'Date from today + 3 days'),
+            ('date_from_today_1week', 'Date from today + 1 week'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'date_from_tomorrow':
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=1)))
+        if self.value() == 'date_from_today_3days':
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=3)))
+        if self.value() == 'date_from_today_1week':
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=7)))
+        return queryset
+
+
 class EventsAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_not_approved.html"
 
-    list_display = ["title", "approved", "from_date_color", open_url, "was_old"]
-    list_filter = ["from_date", "explored_date"]
+    list_display = ["title", "approved", "from_date_order", open_url, "was_old"]
+    list_filter = [FromDateFilter, "explored_date"]
     search_fields = ["title", "post"]
-    actions = ["approve_event"]
+    actions = ["approve_event", "moderate_events"]
     ordering = ["-explored_date", "-from_date"]
+    readonly_fields = ('image_tag',)
 
     def approve_event(self, request, queryset):
         updated = queryset.update(approved=True)
@@ -41,6 +65,42 @@ class EventsAdmin(admin.ModelAdmin):
             messages.SUCCESS,
         )
         utils.move_event_to_post(self.model)
+
+    def from_date_order(self, obj):
+        return obj.from_date_color()
+
+    from_date_order.admin_order_field = 'from_date'
+
+    def moderate_events(self, request, queryset):
+        ids = list(queryset.values_list('id', flat=True))
+        answer = utils.moderate_not_approved_events(ids)
+        if answer:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event was successfully added for moderation AI process.",
+                    "%d events were successfully added for moderation AI process.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event wasn't added for moderation AI process.",
+                    "%d events weren't added for moderation AI process.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.ERROR,
+            )
+
+    def image_tag(self, obj):
+        if obj.image_upload:
+            return format_html('<img src="{}" style="max-width: 200px; max-height: 200px;" />', obj.image_upload.url)
+        return 'No Image'
 
     approve_event.short_description = "Mark selected stories as approved"
 
@@ -58,6 +118,10 @@ class Events2PostAdminForm(forms.ModelForm):
 class Events2PostAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_approved.html"
     change_form_template = "events/change_form.html"
+
+    class Media:
+        js = ('admin_place_searching.js',)
+
     list_display = [
         "title",
         "queue",
@@ -73,26 +137,74 @@ class Events2PostAdmin(admin.ModelAdmin):
     actions = [
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
-        "clear_post_time",
+        "change_status_to_Posted",
+        "prepare_events",
+        #"clear_post_time",
         "change_queue",
-        'update_post_text_for_posting',
+        #'update_post_text_for_posting',
         'transfer_events_to_site',
         utils.post_date_order_by_queue,
-        utils.refresh_posting_time,
+        #utils.refresh_posting_time,
         'text_post_check'
     ]
     admin.ModelAdmin.save_on_top = True
     admin.ModelAdmin.actions_on_bottom = True
     admin.ModelAdmin.actions_selection_counter = True
-    admin.ModelAdmin.actions_selection_counter = True
+
     readonly_fields = ("markdown_post_view_model",)
-    include = ( "markdown_post_view_model")
+    exclude = ("queue", "explored_date", )
+
+    exclude_posted = ("markdown_post_view_model", "image_upload",
+                      "address", "place", "post_date", "is_ready")
+    exclude_not_posted = ('post_url',)
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if obj and obj.status == 'Posted':
+            for incl_field in self.exclude_not_posted:
+                if incl_field not in fields:
+                    fields.append(incl_field)
+            fields = [field for field in fields if field not in self.exclude_posted]
+        else:
+            fields = [field for field in fields if field not in self.exclude_not_posted]
+
+        return fields
 
     form = Events2PostAdminForm
 
-    class Media:
-        pass
-        # js = ('admin.js')
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if 'object_id' in request.resolver_match.kwargs:
+            return queryset
+        if request.GET.get('all') == 'true':
+            return queryset  # Show all events
+        return queryset.exclude(status='Posted')
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_all_url'] = self.get_show_all_url(request)
+        extra_context['filter_ready_to_post_url'] = self.get_filter_ready_to_post_url(request)
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def get_show_all_url(self, request):
+        from django.urls import reverse
+
+        opts = self.model._meta
+        base_url = reverse(f'admin:{opts.app_label}_{opts.model_name}_changelist')
+        query_params = request.GET.copy()
+        query_params['all'] = 'true'
+        query_string = urlencode(query_params, doseq=True)
+        return f'{base_url}?{query_string}'
+
+    def get_filter_ready_to_post_url(self, request):
+        from django.urls import reverse
+
+        opts = self.model._meta
+        base_url = reverse(f'admin:{opts.app_label}_{opts.model_name}_changelist')
+        query_params = request.GET.copy()
+        query_params['status__exact'] = 'ReadyToPost'
+        query_string = urlencode(query_params, doseq=True)
+        return f'{base_url}?{query_string}'
 
     def markdown_post_view(self, instance):
         html_image = f"<div style='width:325px;'><img src='{instance.image}' width='325px'>"
@@ -122,6 +234,19 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     def change_status_to_Spam(self, request, queryset):
         updated = queryset.update(status="Spam")
+        self.message_user(
+            request,
+            ngettext(
+                "%d event was changed on Spam.",
+                "%d events were changed on Spam.",
+                updated,
+            )
+            % updated,
+            messages.SUCCESS,
+        )
+
+    def change_status_to_Posted(self, request, queryset):
+        updated = queryset.update(status="Posted")
         self.message_user(
             request,
             ngettext(
@@ -194,6 +319,31 @@ class Events2PostAdmin(admin.ModelAdmin):
         )
 
 
+    def prepare_events(self, request, queryset):
+        ids = list(queryset.values_list('id', flat=True))
+        answer = utils.prepare_events(ids)
+        if answer:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event was successfully added for preparing to post.",
+                    "%d events were successfully added for preparing to post.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event wasn't added for preparing to post.",
+                    "%d events weren't added for preparing to post.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.ERROR,
+            )
 
 
 weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -203,7 +353,7 @@ class PostingTimesAdmin(admin.ModelAdmin):
 
     list_filter = ["start_weekday"]
     ordering = ["start_weekday", "posting_time_hours"]
-    list_editable = ["posting_time_hours", "posting_time_minutes"]
+    list_editable = ["posting_time",]
 
     def weekdays(self):
         if (0 <= self.start_weekday < 7) & (0 <= self.end_weekday < 7):
@@ -214,7 +364,7 @@ class PostingTimesAdmin(admin.ModelAdmin):
     def timepost(self):
         return f"{self.posting_time_hours}:{self.posting_time_minutes:02}"
 
-    list_display = [weekdays, timepost, "posting_time_hours", "posting_time_minutes"]
+    list_display = [weekdays, timepost, "posting_time", ]
 
 
 class ParametersAdmin(admin.ModelAdmin):

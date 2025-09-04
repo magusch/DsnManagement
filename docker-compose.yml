@@ -9,8 +9,6 @@ services:
         DEBUG: 'false'
        volumes:
          - web-static:/dsn_django/static/
-       ports:
-           - "8000:8000"
        command: gunicorn --bind :8000 --workers 3 dsn_django.wsgi:application
        networks:
          - django-network
@@ -19,7 +17,7 @@ services:
      build: ./nginx/
      restart: always
      ports:
-       - "8080:8080"
+       - "8080:80"
      volumes:
        - web-static:/dsn_django/static/
      links:

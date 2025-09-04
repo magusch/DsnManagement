@@ -62,7 +62,7 @@ class OpenAIHelper:
         return event_data
 
     def new_event_data(self, event):
-        replace_phrases = {'Текст': 'full_text', 'Заголовок': 'title', 'Категория': 'category',
+        replace_phrases = {'Текст': 'prepared_text', 'Заголовок': 'title', 'Категория': 'category',
                            'Адрес': 'address', 'Стоимость': 'price'}
         if self.answer is None:
             self.refactor_post(event)

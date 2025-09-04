@@ -31,8 +31,13 @@
 <br>
 <div class="container">
     {% for place in all_places.all %}
-        <li><a href="{{ place.id }}">{{ place.place_name }}</a></li>
-        {{ place.place_metro }}
+        <div class="place">
+            {% if place.place_image %}
+                <img src="{{ place.place_image }}" width="250px">
+            {% endif %}
+            <li><a href="{{ place.id }}">{{ place.place_name }}</a></li>
+            {{ place.place_metro }}
+        </div>
     {% endfor %}
 </div>
 </body>

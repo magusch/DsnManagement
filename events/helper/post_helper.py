@@ -1,13 +1,16 @@
-import re
+import re, os
 
 from place.utils import address_from_places, place_orm_object
 
 from .datetime_helper import weekday_name, month_name
 
+from category.models import SubCategory
+
 import pytz
 
 from datetime import datetime
 
+TELEGRAM_BOT_NAME = os.environ.get("TELEGRAM_BOT_NAME", None)
 
 class PostHelper:
     def __init__(self, event):
@@ -63,10 +66,12 @@ class PostHelper:
 
         full_title = f"*{title_date}* {title}\n\n"
 
-        if self.event.full_text is None:
-            post_text = self.event.post
+        if not self.event.prepared_text and not self.event.full_text :
+            post_text = ""
+        elif not self.event.prepared_text:
+            post_text = self.reduce_text(self.event.full_text)
         else:
-            post_text = self.reduce_text()
+            post_text = self.reduce_text(self.event.prepared_text)
 
         post_text = (
             post_text.strip()
@@ -80,12 +85,17 @@ class PostHelper:
         footer_link = self.param_manager.get_parameter('finish_link')
         if not footer_link: footer_link = ''
 
+        remind_link = ''
+        if TELEGRAM_BOT_NAME is not None and hasattr(self.event, 'id'):
+            remind_link = f"|| [Сохранить в боте](https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id})"
+
+
         footer = (
             "\n\n"
             f"*Где:* {address_line}\n"
             f"*Когда:* {date_from_to} \n"
             f"*Вход:* [{self.event.price}]({self.event.url})"
-            f"\n\n{footer_link}"
+            f"\n\n{footer_link} {remind_link}"
         )
 
         full_post = (full_title + post_text.strip() + footer).strip()
@@ -93,22 +103,29 @@ class PostHelper:
 
     def address_markdown(self):
         address_line = None
+
+        need_address_line_url = self.param_manager.get_parameter('need_address_line_url')
+        if need_address_line_url:
+            if need_address_line_url.lower() in ('true', '1'):
+                need_address_line_url = True
+            else:
+                need_address_line_url = False
+
         if hasattr(self.event, 'place_id'):
             if self.event.place_id:
                 place = place_orm_object(self.event.place_id)
-                address_line = place.markdown_address()
+                address_line = place.markdown_address(need_address_line_url)
 
         if address_line is None:
             raw_address = self.event.address
             addresses = address_from_places(raw_address)
 
             if addresses:
-                address_line = addresses[0].place.markdown_address()
+                address_line = addresses[0].place.markdown_address(need_address_line_url)
                 if hasattr(self.event, 'place_id'):
                     self.event.place_id = addresses[0].place.id
             else:
-                need_address_line_url = self.param_manager.get_parameter('need_address_line_url')
-                if need_address_line_url and need_address_line_url.lower() in ('true', '1'):
+                if need_address_line_url:
                     address_line = \
                         f"[{self.event.address}](https://2gis.ru/spb/search/{self.event.address})"
                 else:
@@ -198,8 +215,12 @@ class PostHelper:
 
         return start_format + end_format
 
-    def reduce_text(self):
-        post_text = self.event.full_text
+    def main_category(self):
+        if hasattr(self.event, 'category') and self.event.category is not None:
+            subcategory, created = SubCategory.objects.get_or_create(name=self.event.category)
+            return subcategory.category
+
+    def reduce_text(self, post_text):
         if len(post_text) > 550:
             sentences = post_text.split(".")
             post = ""
@@ -207,7 +228,7 @@ class PostHelper:
                 if len(post) < 365:
                     post = post + s + "."
                 else:
-                    post_text = post
+                    post_text = post.strip()
                     break
         return post_text
 
