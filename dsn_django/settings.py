@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "events",
     "place",
     "category",
+    "content_generator",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
