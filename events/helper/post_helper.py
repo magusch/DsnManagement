@@ -67,7 +67,7 @@ class PostHelper:
         full_title = f"*{title_date}* {title}\n\n"
 
         if not self.event.prepared_text and not self.event.full_text :
-            post_text = self.event.post
+            post_text = ""
         elif not self.event.prepared_text:
             post_text = self.reduce_text(self.event.full_text)
         else:
@@ -228,7 +228,7 @@ class PostHelper:
                 if len(post) < 365:
                     post = post + s + "."
                 else:
-                    post_text = post
+                    post_text = post.strip()
                     break
         return post_text
 

@@ -32,7 +32,7 @@ def default_post_text():
 
 
 def default_event_date():
-    return timezone.now() + timezone.timedelta(days=3)
+    return timezone.now().replace(minute=0) + timezone.timedelta(days=3)
 
 
 class EventsNotApprovedNew(models.Model):
@@ -48,15 +48,11 @@ class EventsNotApprovedNew(models.Model):
     category = models.CharField(max_length=500, null=True, blank=True)
     address = models.CharField(max_length=500, blank=True)
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
-    explored_date = models.DateTimeField(
-        "published date and time",
-    )
-    from_date = models.DateTimeField(
-        "event date_from",
-    )
+    explored_date = models.DateTimeField("published date and time", default=timezone.now)
+    from_date = models.DateTimeField("event date_from", null=True, blank=True, default=default_event_date)
     to_date = models.DateTimeField(
         "event to_date",
-        blank=True,
+        null=True, blank=True, default=default_event_date
     )
 
     def __str__(self):
@@ -140,7 +136,7 @@ class Events2Post(models.Model):  # Table events for posting
     event_id = models.CharField(max_length=30, default=random_event_id, db_index=True)
     queue = models.IntegerField(default=last_queue)
     is_ready = models.BooleanField(default=False)
-    title = models.CharField(max_length=500)
+    title = models.CharField(default="фестиваль *«ФЕЙСТНЕЙМ»", max_length=500)
     post = models.TextField(default=default_post_text, blank=True)
     prepared_text = models.TextField(default="", blank=True, null=True)
     full_text = models.TextField(default="", blank=True, null=True)
