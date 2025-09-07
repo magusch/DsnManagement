@@ -15,6 +15,19 @@ from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post
 from . import utils
 
 from .helper.open_ai_helper import OpenAIHelper
+import threading
+from django.db import close_old_connections
+from types import SimpleNamespace
+
+
+def _run_in_background(target, *args, **kwargs):
+    def _wrapper():
+        try:
+            close_old_connections()
+            target(*args, **kwargs)
+        finally:
+            close_old_connections()
+    threading.Thread(target=_wrapper, daemon=True).start()
 
 
 def event_post_html(request, event_id):
@@ -62,8 +75,10 @@ def count_events_by_day(request):
 
 @staff_member_required
 def move_approved_events(request):
-    utils.move_event_to_post(EventsNotApprovedNew)
-    utils.move_event_to_post(EventsNotApprovedProposed)
+    def _do_move():
+        utils.move_event_to_post(EventsNotApprovedNew)
+        utils.move_event_to_post(EventsNotApprovedProposed)
+    _run_in_background(_do_move)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -73,7 +88,7 @@ def move_approved_events(request):
 
 @staff_member_required
 def transfer_posted_events_to_site(request):
-    utils.move_event_to_site(Events2Post)
+    _run_in_background(utils.move_event_to_site, Events2Post)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -84,9 +99,11 @@ def transfer_posted_events_to_site(request):
 
 @staff_member_required
 def remove_old_events(request):
-    utils.delete_old_events(EventsNotApprovedNew)
-    utils.delete_old_events(EventsNotApprovedProposed)
-    utils.delete_old_events(Events2Post)
+    def _do_delete():
+        utils.delete_old_events(EventsNotApprovedNew)
+        utils.delete_old_events(EventsNotApprovedProposed)
+        utils.delete_old_events(Events2Post)
+    _run_in_background(_do_delete)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -102,13 +119,21 @@ def fill_empty_post_time(request):
         #utils.refresh_posting_time(request=request)
 
     elif request.method == "GET":
-        queryset = (
+        # Collect IDs to avoid passing QuerySet across thread boundaries
+        event_ids = list(
             Events2Post.objects.filter(status="ReadyToPost")
             .order_by("queue")
-            .all()
+            .values_list("id", flat=True)
         )
 
-        utils.refresh_posting_time(None, request, queryset=queryset)
+        body_str = request.body.decode("utf-8", errors="ignore") if hasattr(request, "body") else ""
+
+        def _do_refresh(ids, body):
+            req = SimpleNamespace(body=body)
+            qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
+            utils.refresh_posting_time(None, req, queryset=qs)
+
+        _run_in_background(_do_refresh, event_ids, body_str)
 
         if 'HTTP_REFERER' in request.META:
             response = redirect(request.META['HTTP_REFERER'])
@@ -120,19 +145,29 @@ def fill_empty_post_time(request):
 
 @staff_member_required
 def update_all(request):
-    # move events to table Events2Post
-    move_approved_events(request)
+    def _do_update_all():
+        try:
+            utils.move_event_to_post(EventsNotApprovedNew)
+            utils.move_event_to_post(EventsNotApprovedProposed)
 
-    # If post_time is empty fill it with logic
-    fill_empty_post_time(request)
+            ids = list(
+                Events2Post.objects.filter(status="ReadyToPost")
+                .order_by("queue")
+                .values_list("id", flat=True)
+            )
+            req = SimpleNamespace(body="")
+            qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
+            utils.refresh_posting_time(None, req, queryset=qs)
 
-    # Sort by queue and put post_time in this order
-    utils.post_date_order_by_queue()
+            utils.post_date_order_by_queue()
+            utils.delete_old_events(EventsNotApprovedNew)
+            utils.delete_old_events(EventsNotApprovedProposed)
+            utils.delete_old_events(Events2Post)
+            utils.move_event_to_site(Events2Post)
+        finally:
+            pass
 
-    # Delete Old events from all tables
-    remove_old_events(request)
-
-    utils.move_event_to_site(Events2Post)
+    _run_in_background(_do_update_all)
 
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
