@@ -27,18 +27,27 @@ class FromDateFilter(admin.SimpleListFilter):
 
     def lookups(self, request, model_admin):
         return [
-            ('date_from_tomorrow',    'Date from tomorrow'),
-            ('date_from_today_3days', 'Date from today + 3 days'),
-            ('date_from_today_1week', 'Date from today + 1 week'),
+            ('date_from_tomorrow', 'Tomorrow'),
+            ('date_from_tmrw_until_end', 'Tomorrow – End Week'),
+            ('date_from_3days', '3 days ahead'),
+            ('date_from_week', 'A week ahead'),
+            ('date_from_next_week', 'Next week (Mon-Sun)'),
         ]
 
     def queryset(self, request, queryset):
         if self.value() == 'date_from_tomorrow':
             return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=1)))
-        if self.value() == 'date_from_today_3days':
+        if self.value() == 'date_from_tmrw_until_end':
+            monday = timezone.now() + timezone.timedelta(days=(7 - timezone.now().weekday()))
+            return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=1))).filter(from_date__lt=monday)
+        if self.value() == 'date_from_3days':
             return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=3)))
-        if self.value() == 'date_from_today_1week':
+        if self.value() == 'date_from_week':
             return queryset.filter(from_date__gte=(timezone.now() + timezone.timedelta(days=7)))
+        if self.value() == 'date_from_next_week':
+            monday = timezone.now() + timezone.timedelta(days=(7 - timezone.now().weekday()))
+            sunday = monday + timezone.timedelta(days=6)
+            return queryset.filter(from_date__gte=monday).filter(from_date__lt=sunday)
         return queryset
 
 
