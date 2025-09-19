@@ -91,6 +91,9 @@ class GeneratedPost(models.Model):
     tags = models.JSONField(default=list, blank=True, null=True)
     media_files = models.JSONField(default=list, blank=True, null=True)
 
+    image_upload = models.ImageField(upload_to='post_images/', blank=True, null=True)
+    image = models.CharField("Ссылка на изображение", max_length=500, blank=True, null=True)
+
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     generated_by = models.ForeignKey(User, on_delete=models.CASCADE, editable=False, default=1, null=True)
@@ -102,22 +105,37 @@ class GeneratedPost(models.Model):
     def __str__(self):
         return self.title
 
+    def save(self, *args, **kwargs):
+        if self.image_upload and not self.image:
+            self.image = self.image_upload.url
+        super().save(*args, **kwargs)
+
 
 class PostingSchedule(models.Model):
     """Расписание для постинга"""
     generated_post = models.OneToOneField(GeneratedPost, on_delete=models.CASCADE, verbose_name='Пост')
     scheduled_time = models.DateTimeField(verbose_name='Время публикации')
-    platform = models.CharField(max_length=50, verbose_name='Платформа', help_text='Telegram, VK, etc.')
+    platform = models.CharField(max_length=50, choices=(("telegram", "Telegram"), ("vk", "VK")),
+                                default='telegram', verbose_name='Платформа', help_text='telegram, vk, etc.')
 
     platform_settings = models.JSONField(default=dict, blank=True, null=True,)
 
     is_posted = models.BooleanField(default=False, verbose_name='Опубликован')
+
+    status = models.CharField(
+        max_length=15,
+        choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"),
+                 ("ForFuture", "For Future"), ("Spam", "Spam")),
+        default="ReadyToPost",
+        db_index=True
+    )
+
     posted_at = models.DateTimeField(null=True, blank=True, verbose_name='Время публикации')
 
     error_message = models.TextField(blank=True, null=True, verbose_name='Сообщение об ошибке')
     retry_count = models.IntegerField(default=0, verbose_name='Количество попыток')
 
-    created_at = models.DateTimeField(default = timezone.now)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
     class Meta:

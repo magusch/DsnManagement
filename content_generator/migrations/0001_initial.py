@@ -176,6 +176,7 @@ class Migration(migrations.Migration):
                 (
                     "platform",
                     models.CharField(
+                        default="telegram",
                         help_text="Telegram, VK, etc.",
                         max_length=50,
                         verbose_name="Платформа",

@@ -64,15 +64,15 @@ class GeneratedPostAdmin(admin.ModelAdmin):
 
 @admin.register(PostingSchedule)
 class PostingScheduleAdmin(admin.ModelAdmin):
-    list_display = ['generated_post', 'platform', 'scheduled_time', 'is_posted', 'retry_count']
+    list_display = ['generated_post', 'status', 'scheduled_time', 'is_posted', 'retry_count']
     list_filter = ['platform', 'is_posted', 'scheduled_time']
+    list_editable = ["scheduled_time", "status"]
     readonly_fields = ['posted_at']
     exclude = ['created_at', 'updated_at']
 
 
 @admin.action(description="Сгенерировать пост по шаблону")
 def generate_post_action(modeladmin, request, queryset):
-    # queryset — выбранные объекты EventSelection
     template = PostTemplate.objects.filter(is_active=True).first()  # или выбрать через форму
     if not template:
         messages.error(request, "Нет активного шаблона!")
