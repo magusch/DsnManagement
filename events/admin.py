@@ -22,7 +22,7 @@ open_url.short_description = "URL"
 
 
 class FromDateFilter(admin.SimpleListFilter):
-    title = 'From Date field'
+    title = 'Event Date Filter'
     parameter_name = 'from_date_field'
 
     def lookups(self, request, model_admin):
@@ -380,6 +380,7 @@ class ParametersAdmin(admin.ModelAdmin):
     list_display = ['site', 'parameter_name', 'value', 'commentary']
     list_editable = ['value', 'commentary']
     actions = ["copy",]
+    change_list_template = "events/param_change_list.html"
 
     def copy(self, request, queryset):
         for obj in queryset:
