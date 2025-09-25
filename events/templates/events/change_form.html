@@ -26,16 +26,26 @@
 {% block content %}<div id="content-main">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-<script>
+{% comment %} Provide URLs via data-* so JS has no template tags {% endcomment %}
+<div id="ai-url-config"
+     data-channel-api-url="{% url 'channel_api' %}"
+     {% if original.id %}
+     data-remake-post-url="{% url 'remake_post' id=original.id %}"
+     data-remake-post-ai-url="{% url 'remake_post_by_ai' id=original.id %}"
+     {% else %}
+     data-remake-post-url="{% url 'remake_post_empty' %}"
+     data-remake-post-ai-url="{% url 'remake_empty_post_by_ai' %}"
+     {% endif %}
+></div>
 
-        {% if original.id %}
-          var remake_post_url = '{% url 'remake_post' id=original.id %}';
-          var remake_post_ai_url = '{% url 'remake_post_by_ai' id=original.id %}';
-        {% else %}
-          {# Handle the case when original.id is not defined or empty #}
-          var remake_post_url = '{% url 'remake_post_empty' %}';
-          var remake_post_ai_url = '{% url 'remake_empty_post_by_ai' %}';
-        {% endif %}
+<script>
+// eslint-disable-next-line
+// @ts-nocheck
+
+        var __cfg = document.getElementById('ai-url-config');
+        var channel_api_url = __cfg ? __cfg.getAttribute('data-channel-api-url') : '';
+        var remake_post_url = __cfg ? __cfg.getAttribute('data-remake-post-url') : '';
+        var remake_post_ai_url = __cfg ? __cfg.getAttribute('data-remake-post-ai-url') : '';
 
         let initial_event
 
@@ -71,9 +81,32 @@
                     let data = response;
                     for (const key in data) {
                         if (data.hasOwnProperty(key)) {
-                            const element = document.getElementById(`id_${key}`);
-                            if (element) {
-                                element.value = data[key];
+                            const value = data[key];
+                            
+                            // Handle datetime fields that come as ISO strings like '2025-09-26T22:00'
+                            if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.includes('T')) {
+                                try {
+                                    const dateObj = new Date(value);
+                                    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+                                    const timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+                                    
+                                    const dateElement = document.getElementById(`id_${key}_0`);
+                                    const timeElement = document.getElementById(`id_${key}_1`);
+                                    
+                                    if (dateElement) dateElement.value = dateStr;
+                                    if (timeElement) timeElement.value = timeStr;
+                                } catch (e) {
+                                    console.warn(`Failed to parse datetime ${key}: ${value}`, e);
+                                    // Fallback to setting as regular field
+                                    const element = document.getElementById(`id_${key}`);
+                                    if (element) element.value = value;
+                                }
+                            } else {
+                                // Regular field
+                                const element = document.getElementById(`id_${key}`);
+                                if (element) {
+                                    element.value = value;
+                                }
                             }
                         }
                     }
@@ -102,9 +135,32 @@
                     var data = response[0];
                     for (const key in data) {
                         if (data.hasOwnProperty(key)) {
-                            const element = document.getElementById(`id_${key}`);
-                            if (element) {
-                                element.value = data[key];
+                            const value = data[key];
+                            
+                            // Handle datetime fields that come as ISO strings like '2025-09-26T22:00'
+                            if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.includes('T')) {
+                                try {
+                                    const dateObj = new Date(value);
+                                    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+                                    const timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+                                    
+                                    const dateElement = document.getElementById(`id_${key}_0`);
+                                    const timeElement = document.getElementById(`id_${key}_1`);
+                                    
+                                    if (dateElement) dateElement.value = dateStr;
+                                    if (timeElement) timeElement.value = timeStr;
+                                } catch (e) {
+                                    console.warn(`Failed to parse datetime ${key}: ${value}`, e);
+                                    // Fallback to setting as regular field
+                                    const element = document.getElementById(`id_${key}`);
+                                    if (element) element.value = value;
+                                }
+                            } else {
+                                // Regular field
+                                const element = document.getElementById(`id_${key}`);
+                                if (element) {
+                                    element.value = value;
+                                }
                             }
                         }
                     }
@@ -134,6 +190,30 @@
             return event
         }
 
+        function setAiStatus(text, color) {
+            var s = document.getElementById('ai-status');
+            if (!s) return;
+            s.textContent = text || '';
+            if (color) s.style.color = color; else s.style.color = '';
+        }
+
+        function setAiDetail(obj) {
+            var wrap = document.getElementById('ai-status-detail-wrap');
+            var pre = document.getElementById('ai-status-detail');
+            if (!wrap || !pre) return;
+            if (!obj) {
+                wrap.style.display = 'none';
+                pre.textContent = '';
+                return;
+            }
+            wrap.style.display = 'block';
+            try {
+                pre.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+            } catch(e) {
+                pre.textContent = String(obj);
+            }
+        }
+
         function newRemakePostByAi() {
             let event_data = getEventValues()
 
@@ -147,12 +227,18 @@
                 },
             };
 
+            setAiDetail(null);
+            setAiStatus('Отправляю запрос...', '#333');
+            var btn = document.getElementById('btn-new-ai');
+            if (btn) btn.classList.add('disabled');
+
             $.ajax({
-                    url: '{% url 'channel_api' %}',
+                    url: channel_api_url,
                     method: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify(data),
                     success: function(response) {
+                        setAiStatus('Запрос принят. Обработка...', '#333');
                         let taskId = response['task_id']
                         let rest_interval = 50000;
                         let interval_sec = 5000;
@@ -164,21 +250,54 @@
                                     let data = result['result'];
                                     for (const key in data) {
                                         if (data.hasOwnProperty(key)) {
-                                            const element = document.getElementById(`id_${key}`);
-                                            if (element) {
-                                                element.value = data[key];
+                                            const value = data[key];
+                                            
+                                            // Handle datetime fields that come as ISO strings like '2025-09-26T22:00'
+                                            if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.includes('T')) {
+                                                try {
+                                                    const dateObj = new Date(value);
+                                                    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+                                                    const timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+                                                    
+                                                    const dateElement = document.getElementById(`id_${key}_0`);
+                                                    const timeElement = document.getElementById(`id_${key}_1`);
+                                                    
+                                                    if (dateElement) dateElement.value = dateStr;
+                                                    if (timeElement) timeElement.value = timeStr;
+                                                } catch (e) {
+                                                    console.warn(`Failed to parse datetime ${key}: ${value}`, e);
+                                                    // Fallback to setting as regular field
+                                                    const element = document.getElementById(`id_${key}`);
+                                                    if (element) element.value = value;
+                                                }
+                                            } else {
+                                                // Regular field
+                                                const element = document.getElementById(`id_${key}`);
+                                                if (element) {
+                                                    element.value = value;
+                                                }
                                             }
                                         }
                                     }
+                                    setAiStatus('Готово: обновлено успешно', 'green');
+                                    setAiDetail(data);
                                     clearInterval(interval);  // Stop checking when result is available
+                                    if (btn) btn.classList.remove('disabled');
+                                } else if (result['status']==='error') {
+                                    setAiStatus('Ошибка при обработке', 'red');
+                                    setAiDetail(result['message'] || result);
+                                    clearInterval(interval);
+                                    if (btn) btn.classList.remove('disabled');
                                 }
                             }
                             rest_interval = rest_interval - interval_sec
                         }, interval_sec);
                     },
                     error: function(xhr, status, error) {
-                        console.error(`There is error on ChannelBot server: ${error}. Run local`);
+                        setAiStatus('Сервер ChannelBot недоступен, выполняю локально...', '#b36b00');
+                        setAiDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
                         remakePostByAi();
+                        if (btn) btn.classList.remove('disabled');
                     }
                 });
 
@@ -195,12 +314,11 @@
             }
             return new Promise((resolve, reject) => {
                 $.ajax({
-                    url: '{% url 'channel_api' %}',
+                    url: channel_api_url,
                     method: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify(data),
                     success: function(response) {
-                        //console.log(response);
                         resolve(response);
                     },
                     error: function(xhr, status, error) {
@@ -238,7 +356,8 @@
           <a href="#" onclick="remakePostByAi()"  alt="It uses value of title, full_text, date_from, price, url">Remake post by GPT</a>
       </li>
       <li>
-          <a href="#" onclick="newRemakePostByAi()"  alt="It uses value of title, full_text, date_from, price, url">NEW Remake post by GPT</a>
+          <a href="#" id="btn-new-ai" onclick="newRemakePostByAi()"  alt="It uses value of title, full_text, date_from, price, url">NEW Remake post by GPT</a>
+          <span id="ai-status" style="margin-left:8px;"></span>
       </li>
       <li>
           <a href="#" onclick="hideFullText()" id="hide_full_text">Show full text</a>
@@ -308,6 +427,9 @@
 {# JavaScript for prepopulated fields #}
 {% prepopulated_fields_js %}
 
+</div>
+<div id="ai-status-detail-wrap" style="margin: 8px 0 0 0; display: none;">
+    <pre id="ai-status-detail" style="max-height: 260px; overflow:auto; background:#f6f6f6; padding:8px; border:1px solid #ddd;"></pre>
 </div>
 </form></div>
     <script>
