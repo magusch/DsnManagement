@@ -3,6 +3,7 @@ from django.utils.translation import ngettext
 from django.utils.html import format_html
 from django.utils.http import urlencode
 from django.utils import timezone
+from django.db.models import Q
 
 import markdown
 
@@ -51,11 +52,56 @@ class FromDateFilter(admin.SimpleListFilter):
         return queryset
 
 
+class SourceFilter(admin.SimpleListFilter):
+    title = 'Source Filter'
+    parameter_name = 'source_field'
+
+    SOURCES = {
+        'timepad': ('Timepad', 'TIMEPAD-'),
+        'ticketscloud': ('Ticketscloud', 'TC-'),
+        'radario': ('Radario', 'RADARIO-'),
+        'mts': ('MTS', 'MTS-'),
+        'qtickets': ('Qtickets', 'QT-'),
+        'vk': ('VK', 'VK-'),
+    }
+
+    def lookups(self, request, model_admin):
+        return [
+            ('timepad', 'Timepad'),
+            ('ticketscloud', 'Ticketscloud'),
+            ('radario', 'Radario'),
+            ('mts', 'MTS'),
+            ('qtickets', 'Qtickets'),
+            ('vk', 'VK'),
+            ('other', 'Other'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'timepad':
+            return queryset.filter(event_id__startswith='TIMEPAD-')
+        elif self.value() == 'ticketscloud':
+            return queryset.filter(event_id__startswith='TC-')
+        elif self.value() == 'qtickets':
+            return queryset.filter(event_id__startswith='QT-')
+        elif self.value() == 'radario':
+            return queryset.filter(event_id__startswith='RADARIO-')
+        elif self.value() == 'mts':
+            return queryset.filter(event_id__startswith='MTS-')
+        elif self.value() == 'vk':
+            return queryset.filter(event_id__startswith='VK-')
+        elif self.value() == 'other':
+            q_objects = Q()
+            for key, info in self.SOURCES.items():
+                prefix = info[1]
+                q_objects |= Q(event_id__startswith=prefix)
+            return queryset.exclude(q_objects)
+
+
 class EventsAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_not_approved.html"
 
     list_display = ["title", "approved", "from_date_order", open_url, "was_old"]
-    list_filter = [FromDateFilter, "explored_date"]
+    list_filter = [FromDateFilter, SourceFilter, "explored_date"]
     search_fields = ["title", "post"]
     actions = ["approve_event", "moderate_events"]
     ordering = ["-explored_date", "-from_date"]
