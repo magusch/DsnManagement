@@ -12,6 +12,7 @@ services:
        command: gunicorn --bind :8000 --workers 3 dsn_django.wsgi:application
        networks:
          - django-network
+         - dsn_network
 
    nginx:
      build: ./nginx/
@@ -24,9 +25,13 @@ services:
        - web:web
      networks:
        - django-network
+       - dsn_network
+
 networks:
   django-network:
     name: django-network
+  dsn_network:
+    name: dsn_network
 
 volumes:
   web-static:
