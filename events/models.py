@@ -35,6 +35,18 @@ def default_event_date():
     return timezone.now().replace(minute=0) + timezone.timedelta(days=3)
 
 
+class Source(models.TextChoices):
+    TIMEPAD = 'TIMEPAD', 'Timepad'
+    RADARIO = 'RADARIO', 'Radario'
+    TICKETSCLOUD = 'TC', 'Ticketscloud'
+    QTICKETS = 'QT', 'QTickets'
+    CULTURE = 'CLTR', 'Culture'
+    MTS = 'MTS', 'MTS'
+    VK = 'VK', 'VK'
+    AI = 'AI', 'AI'
+    OTHER = 'OTHER', 'Other'
+
+
 class EventsNotApprovedNew(models.Model):
     event_id = models.CharField(max_length=30)
     approved = models.BooleanField(default=False, blank=True)
@@ -43,11 +55,18 @@ class EventsNotApprovedNew(models.Model):
     full_text = models.TextField(default="", blank=True, null=True)
     image = models.CharField(max_length=500, blank=True, null=True)
     url = models.CharField(max_length=500, blank=True)
+    ticket_url = models.CharField(max_length=500, blank=True, null=True)
     price = models.CharField(max_length=500, blank=True)
     price_int = models.IntegerField(null=True, blank=True)
     category = models.CharField(max_length=500, null=True, blank=True)
     address = models.CharField(max_length=500, blank=True)
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.OTHER,
+        db_index=True
+    )
     explored_date = models.DateTimeField("published date and time", default=timezone.now)
     from_date = models.DateTimeField("event date_from", null=True, blank=True, default=default_event_date)
     to_date = models.DateTimeField(
@@ -81,11 +100,18 @@ class EventsNotApprovedProposed(models.Model):
     image_upload = models.ImageField(upload_to='event_images/', blank=True, null=True)
     image = models.CharField("Ссылка на изображение", max_length=500, blank=True, null=True)
     url = models.CharField("Ссылка на мероприятие", max_length=500, blank=True)
+    ticket_url = models.CharField(max_length=500, blank=True, null=True)
     price = models.CharField("Цена", default="1000₽", max_length=500, blank=True)
     price_int = models.IntegerField(null=True, blank=True)
     category = models.CharField("Категория (тип мероприятия)", max_length=500, null=True, blank=True)
     address = models.CharField("Адрес", max_length=500, blank=True)
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.OTHER,
+        db_index=True
+    )
     explored_date = models.DateTimeField(
         "published date and time", default=timezone.now
     )
@@ -143,6 +169,7 @@ class Events2Post(models.Model):  # Table events for posting
     image = models.CharField(max_length=500, blank=True, null=True)
     image_upload = models.ImageField(upload_to='event_images/', blank=True, null=True)
     url = models.CharField(max_length=500, blank=True)
+    ticket_url = models.CharField(max_length=500, blank=True, null=True)
     status = models.CharField(
         max_length=15,
         choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"), ("ForFuture", "For Future"),
@@ -158,6 +185,12 @@ class Events2Post(models.Model):  # Table events for posting
     address = models.CharField(max_length=500, blank=True)
 
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.OTHER,
+        db_index=True
+    )
     explored_date = models.DateTimeField(
         "published date and time", default=timezone.now
     )

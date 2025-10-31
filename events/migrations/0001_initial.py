@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                 ('event_id', models.CharField(default=events.models.random_event_id, max_length=30, db_index=True)),
                 ('queue', models.IntegerField(default=events.models.last_queue)),
                 ('is_ready', models.BooleanField(default=False)),
-                ('title', models.CharField(max_length=500)),
+                ('title', models.CharField(max_length=500, default="фестиваль *«ФЕЙСТНЕЙМ»")),
                 ('post', models.TextField(default=events.models.default_post_text, blank=True)),
                 ('prepared_text', models.TextField(blank=True, default='', null=True)),
                 ('full_text', models.TextField(blank=True, default='', null=True)),
