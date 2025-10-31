@@ -89,12 +89,17 @@ class PostHelper:
         if TELEGRAM_BOT_NAME is not None and hasattr(self.event, 'id'):
             remind_link = f"|| [Сохранить в боте](https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id})"
 
+        if hasattr(self.event, 'ticket_url') and self.event.ticket_url:
+            event_url = self.event.ticket_url
+        else:
+            event_url = self.event.url
+
 
         footer = (
             "\n\n"
             f"*Где:* {address_line}\n"
             f"*Когда:* {date_from_to} \n"
-            f"*Вход:* [{self.event.price}]({self.event.url})"
+            f"*Вход:* [{self.event.price}]({event_url})"
             f"\n\n{footer_link} {remind_link}"
         )
 
