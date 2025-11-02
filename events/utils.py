@@ -17,10 +17,10 @@ CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
 
 current_tz = timezone.get_current_timezone()
 
-current_tz_int = (
-    timezone.now().hour - timezone.now().hour
-)
-if current_tz_int<0: current_tz_int=24+current_tz_int
+current_tz_int = timezone.now().astimezone(current_tz).hour - timezone.now().hour
+
+if current_tz_int < 0:
+    current_tz_int = 24 + current_tz_int
 
 def _is_weekday(dt: datetime.datetime) -> bool:
     return dt.weekday() in [0, 1, 2, 3, 4]
