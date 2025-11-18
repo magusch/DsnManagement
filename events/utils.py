@@ -145,12 +145,15 @@ def move_event_to_post(Events_model):
         "full_text",
         "image",
         "url",
+        "ticket_url",
         "price",
+        "price_int",
         "category",
         "address",
         "explored_date",
         "from_date",
         "to_date",
+        "source"
     ]
 
     events = Events_model.objects.filter(approved=True)

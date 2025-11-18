@@ -2,8 +2,10 @@ from django.db import models
 
 from django.apps import apps
 
+
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    name_local = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "categories"
@@ -13,7 +15,7 @@ class Category(models.Model):
 
 
 class SubCategory(models.Model):
-    name = models.CharField(max_length=250)
+    name = models.CharField(max_length=250, unique=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
