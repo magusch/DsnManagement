@@ -188,19 +188,17 @@ class Events2PostAdmin(admin.ModelAdmin):
     ]
 
     list_editable = ["queue", "post_date"]
-    search_fields = ["title", "post"]
+    search_fields = ["title", "post", "address"]
     actions = [
+        "prepare_events",
+        "change_queue",
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
         "change_status_to_Posted",
-        "prepare_events",
-        #"clear_post_time",
-        "change_queue",
-        #'update_post_text_for_posting',
         'transfer_events_to_site',
         utils.post_date_order_by_queue,
-        #utils.refresh_posting_time,
-        'text_post_check'
+        'text_post_check',
+        'upload_image_s3'
     ]
     admin.ModelAdmin.save_on_top = True
     admin.ModelAdmin.actions_on_bottom = True
@@ -315,9 +313,6 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     utils.post_date_order_by_queue.acts_on_all = True
 
-    # empty post_time
-    def clear_post_time(self, request, queryset):
-        queryset.update(post_date=None)
 
     # Change queue of events by round (1->2, 2->3, 3->1)
     def change_queue(self, request, queryset):
@@ -394,6 +389,32 @@ class Events2PostAdmin(admin.ModelAdmin):
                 ngettext(
                     "%d event wasn't added for preparing to post.",
                     "%d events weren't added for preparing to post.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.ERROR,
+            )
+
+    def upload_image_s3(self, request, queryset):
+        ids = list(queryset.values_list('id', flat=True))
+        answer = utils.upload_image_event_to_s3(ids)
+        if answer:
+            self.message_user(
+                request,
+                ngettext(
+                    '%d event was successfully added for uploading images to s3.',
+                    '%d events were successfully added for uploading images to s3.',
+                    len(ids),
+                )
+                % len(ids),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event wasn't added for uploading images to s3.",
+                    "%d events weren't added for uploading images to s3",
                     len(ids),
                 )
                 % len(ids),

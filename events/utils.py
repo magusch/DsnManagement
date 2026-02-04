@@ -353,3 +353,15 @@ def prepare_events(event_ids):
 
     if response.status_code == 200:
         return True
+
+
+def upload_image_event_to_s3(event_ids):
+    data = {
+        "api_url": "api/upload_event_images_to_s3/",
+        "method": "POST",
+        "data": {"event_ids": event_ids}
+    }
+    response = channel_api_request(data)
+
+    if response.status_code == 200:
+        return True
