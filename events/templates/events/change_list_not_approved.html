@@ -6,7 +6,7 @@
     function toggleSelection() {
         const selectionDiv = document.getElementById('siteSelection');
         if (selectionDiv.style.display === "none") {
-            selectionDiv.style.display = "block";
+            selectionDiv.style.display = "flex";
             document.getElementById('toggle_option').style.display = "none";
         } else {
             selectionDiv.style.display = "none";
@@ -59,15 +59,17 @@
          <a class="button" id="toggle_option" onclick="toggleSelection()">Request new events</a>
 
     </div>
-     <p><div id="siteSelection" style="display:none">
-            <a class="button" id="request_events" onclick="eventsFromSites()">Request events!</a>
-            <a class="button" id="mts" onclick="addItem('mts')">MTS event</a>
-            <a class="button" id="vk" onclick="addItem('vk')">vk event</a>
-            <a class="button" id="timepad" onclick="addItem('timepad')">timepad event</a>
-            <a class="button" id="qtickets" onclick="addItem('qtickets')">qtickets event</a>
-            <a class="button" id="radario" onclick="addItem('radario')">radario event</a>
-            <a class="button" id="ticketscloud" onclick="addItem('ticketscloud')">ticketscloud event</a>
-            <a class="button" id="culture" onclick="addItem('culture')">culture event</a>
+    <p>
+        <div id="siteSelection" style="display:none; flex-wrap: wrap; gap: 8px; margin-top: 8px; max-width:80%; ">
+            <a class="button" id="request_events" onclick="eventsFromSites()" style="display:flex; background-color:green;">Request events!</a>
+            <a class="button" id="mts" onclick="addItem('mts')" style="display:flex;">MTS event</a>
+            <a class="button" id="vk" onclick="addItem('vk')" style="display:flex;">vk event</a>
+            <a class="button" id="timepad" onclick="addItem('timepad')" style="display:flex;">timepad event</a>
+            <a class="button" id="qtickets" onclick="addItem('qtickets')" style="display:flex;">qtickets event</a>
+            <a class="button" id="radario" onclick="addItem('radario')" style="display:flex;">radario event</a>
+            <a class="button" id="ticketscloud" onclick="addItem('ticketscloud')" style="display:flex;">ticketscloud event</a>
+            <a class="button" id="culture" onclick="addItem('culture')" style="display:flex;">culture event</a>
+            <a class="button" id="tg" onclick="addItem('tg')" style="display:flex;">tg post</a>
         </div>
     </p>
     <br/>
