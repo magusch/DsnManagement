@@ -34,6 +34,30 @@ def default_post_text():
 def default_event_date():
     return timezone.now().replace(minute=0) + timezone.timedelta(days=3)
 
+class Status(models.TextChoices):
+    NEW = 'new', 'New'
+    EXTRACTED = 'extracted', 'Extracted'
+    NOT_EVENT = 'not_event', 'Not Event'
+    PENDING = 'pending', 'Pending'
+    APPROVED = 'approved', 'Approved'
+    REJECTED = 'rejected', 'Rejected'
+    SPAM = 'spam', 'Spam'
+    DUPLICATE = 'duplicate', 'Duplicate'
+
+    @property
+    def color(self):
+        colors = {
+            Status.NEW: '#007bff',
+            Status.EXTRACTED: '#17a2b8',
+            Status.PENDING: 'orange',
+            Status.APPROVED: 'green',
+            Status.REJECTED: 'red',
+            Status.SPAM: 'red',
+            Status.DUPLICATE: 'gray',
+            Status.NOT_EVENT: 'black',
+        }
+        return colors.get(self, 'black')  # 'black' как фолбек
+
 
 class Source(models.TextChoices):
     TIMEPAD = 'TIMEPAD', 'Timepad'
@@ -43,14 +67,20 @@ class Source(models.TextChoices):
     CULTURE = 'CLTR', 'Culture'
     MTS = 'MTS', 'MTS'
     VK = 'VK', 'VK'
+    TG = 'TG', 'Telegram'
     AI = 'AI', 'AI'
     OTHER = 'OTHER', 'Other'
 
 
 class EventsNotApprovedNew(models.Model):
     event_id = models.CharField(max_length=30)
-    approved = models.BooleanField(default=False, blank=True)
+    approved = models.BooleanField(default=False, blank=True) # Deprecated
     title = models.CharField(max_length=500)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices, default=Status.NEW,
+        db_index=True, null=True
+    )
     post = models.TextField(default="", blank=True)
     full_text = models.TextField(default="", blank=True, null=True)
     image = models.CharField(max_length=500, blank=True, null=True)
@@ -90,11 +120,24 @@ class EventsNotApprovedNew(models.Model):
                 f'<span style="color: Green;">{self.from_date.ctime()}</span>'
             )
 
+    def status_color(self):
+        status_enum = Status(self.status)
+        return format_html(
+            '<span style="color: {};">{}</span>',
+            status_enum.color, status_enum.label
+        )
+    status_color.short_description = 'Status'
+
 
 class EventsNotApprovedProposed(models.Model):
     event_id = models.CharField(max_length=30, default=random_event_id)
-    approved = models.BooleanField(default=False)
+    approved = models.BooleanField(default=False) # Deprecated
     title = models.CharField("Заголовок", max_length=500)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices, default=Status.NEW,
+        db_index=True, null=True
+    )
     post = models.TextField(default="", blank=True)
     full_text = models.TextField("Текст мероприятия", default="", blank=True, null=True)
     image_upload = models.ImageField(upload_to='event_images/', blank=True, null=True)

@@ -7,7 +7,7 @@ from django.db.models import Q
 
 import markdown
 
-from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event
+from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event, Status
 
 
 from . import utils
@@ -100,15 +100,29 @@ class SourceFilter(admin.SimpleListFilter):
 class EventsAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_not_approved.html"
 
-    list_display = ["title", "approved", "from_date_order", open_url, "was_old"]
-    list_filter = [FromDateFilter, SourceFilter, "explored_date"]
+    list_display = ["title", "status_color_display", "from_date_order", open_url, "was_old"]
+    list_filter = ["status", FromDateFilter, SourceFilter, "explored_date"]
     search_fields = ["title", "post"]
-    actions = ["approve_event", "moderate_events"]
+    actions = ["approve_event", "moderate_events", "mark_as_rejected", "mark_as_spam", "mark_as_duplicate"]
     ordering = ["-explored_date", "-from_date"]
     readonly_fields = ('image_tag',)
 
+    def status_color_display(self, obj):
+        return obj.status_color()
+    status_color_display.short_description = "Status"
+    status_color_display.admin_order_field = "status"
+
+    # def get_queryset(self, request):
+    #     qs = super().get_queryset(request)
+    #     if 'object_id' in request.resolver_match.kwargs:
+    #         return qs
+    #     if any(k.startswith('status') for k in request.GET):
+    #         return qs
+    #     return qs #.exclude(status__in=['approved', 'rejected', 'spam', 'duplicate'])
+
     def approve_event(self, request, queryset):
         updated = queryset.update(approved=True)
+        self._change_status(request, queryset, Status.APPROVED)
         self.message_user(
             request,
             ngettext(
@@ -151,6 +165,31 @@ class EventsAdmin(admin.ModelAdmin):
                 % len(ids),
                 messages.ERROR,
             )
+
+    def _change_status(self, request, queryset, status):
+        updated = queryset.update(status=status)
+        label = status.label
+        self.message_user(
+            request,
+            ngettext(
+                f"%d event was marked as {label}.",
+                f"%d events were marked as {label}.",
+                updated,
+            ) % updated,
+            messages.SUCCESS,
+        )
+
+    def mark_as_rejected(self, request, queryset):
+        self._change_status(request, queryset, Status.REJECTED)
+    mark_as_rejected.short_description = "Mark as Rejected"
+
+    def mark_as_spam(self, request, queryset):
+        self._change_status(request, queryset, Status.SPAM)
+    mark_as_spam.short_description = "Mark as Spam"
+
+    def mark_as_duplicate(self, request, queryset):
+        self._change_status(request, queryset, Status.DUPLICATE)
+    mark_as_duplicate.short_description = "Mark as Duplicate"
 
     def image_tag(self, obj):
         if obj.image_upload:
