@@ -39,14 +39,14 @@ class PlaceAdmin(admin.ModelAdmin):
         instances = formset.save(commit=False)
 
         for instance in instances:
-            if instance.weekday or instance.date or instance.schedule_type == 'hol':
+            if instance.weekday is not None or instance.date or instance.schedule_type == 'hol':
                 instance.save()
             else:
                 if instance.pk:
                     instance.delete()
 
         formset.deleted_objects = [
-            obj for obj in instances if not (obj.weekday or obj.date)
+            obj for obj in instances if obj.weekday is None and not obj.date
         ]
 
         formset.save_m2m()

@@ -178,9 +178,11 @@
             let from_date = document.getElementById('id_from_date_0').value + ' ' + document.getElementById('id_from_date_1').value
             let to_date = document.getElementById('id_to_date_0').value + ' ' + document.getElementById('id_to_date_1').value
 
+            let mainCategoryEl = document.getElementById('id_main_category');
             let event = {
                 id: '{{ original.id }}',
                 place_id: document.getElementById('id_place').value,
+                main_category_id: mainCategoryEl ? mainCategoryEl.value : '',
                 title: document.getElementById('id_title').value,
                 full_text: document.getElementById('id_full_text').value,
                 prepared_text: document.getElementById('id_prepared_text').value,

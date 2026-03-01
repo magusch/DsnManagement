@@ -12,6 +12,9 @@ from datetime import datetime
 
 TELEGRAM_BOT_NAME = os.environ.get("TELEGRAM_BOT_NAME", None)
 
+EXHIBITION_CATEGORY_ID = 11
+EXHIBITION_MIN_DAYS = 8
+
 class PostHelper:
     def __init__(self, event):
         self.TIMEZONE = pytz.timezone("Europe/Moscow")
@@ -31,6 +34,43 @@ class PostHelper:
 
         self.event.from_date = self.event.from_date.astimezone(self.TIMEZONE)
         self.event.to_date = self.event.to_date.astimezone(self.TIMEZONE)
+
+    def _is_long_exhibition(self):
+        main_cat_id = getattr(self.event, 'main_category_id', None)
+        if main_cat_id is None or main_cat_id == '':
+            return False
+        if int(main_cat_id) != EXHIBITION_CATEGORY_ID:
+            return False
+        date_from = self.event.from_date
+        date_to = self.event.to_date
+        if date_to is None:
+            return False
+        return (date_to - date_from).days >= EXHIBITION_MIN_DAYS
+
+    def _get_exhibition_schedule(self):
+        place_id = getattr(self.event, 'place_id', None)
+        if place_id:
+            place = place_orm_object(place_id)
+            if place:
+                schedule_str = place.get_schedule_str()
+                if schedule_str:
+                    return schedule_str
+
+        # Fallback: расписание из времени события
+        date_from = self.event.from_date
+        date_to = self.event.to_date
+        if date_from and date_to:
+            s_hour = date_from.hour
+            s_minute = date_from.minute
+            e_hour = date_to.hour
+            e_minute = date_to.minute
+            if s_hour != 0 or s_minute != 0 or e_hour != 0 or e_minute != 0:
+                from .datetime_helper import WEEKNAMES
+                day_from = WEEKNAMES[date_from.weekday()]
+                day_to = WEEKNAMES[date_to.weekday()]
+                return f"{day_from}-{day_to} {s_hour:02}:{s_minute:02}–{e_hour:02}:{e_minute:02}"
+
+        return None
 
     def get_event_name(self):
         return f"Event: {self.title}"
@@ -155,6 +195,12 @@ class PostHelper:
         date_from = self.event.from_date
         date_to = self.event.to_date
 
+        if self._is_long_exhibition():
+            return "До {day} {month}".format(
+                day=date_to.day,
+                month=month_name(date_to),
+            )
+
         if date_to is None:
             title_date = "{day} {month}".format(
                 day=date_from.day,
@@ -187,6 +233,11 @@ class PostHelper:
         return title_date
 
     def date_to_post(self):
+        if self._is_long_exhibition():
+            schedule = self._get_exhibition_schedule()
+            if schedule:
+                return schedule
+
         date_from = self.event.from_date
         date_to = self.event.to_date
 
