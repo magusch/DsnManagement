@@ -100,7 +100,7 @@ class SourceFilter(admin.SimpleListFilter):
 class EventsAdmin(admin.ModelAdmin):
     change_list_template = "events/change_list_not_approved.html"
 
-    list_display = ["title", "status_color_display", "from_date_order", open_url, "was_old"]
+    list_display = ["title", "status_color_display", "from_date_order", open_url, "score"]
     list_filter = ["status", FromDateFilter, SourceFilter, "explored_date"]
     search_fields = ["title", "post"]
     actions = ["approve_event", "moderate_events", "mark_as_rejected", "mark_as_spam", "mark_as_duplicate"]

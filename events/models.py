@@ -103,6 +103,8 @@ class EventsNotApprovedNew(models.Model):
         "event to_date",
         null=True, blank=True, default=default_event_date
     )
+    score = models.IntegerField(verbose_name='total event score', null=True, blank=True)
+    score_breakdown = models.JSONField(verbose_name='event score by categories',null=True, blank=True)
 
     def __str__(self):
         return self.title
@@ -121,11 +123,14 @@ class EventsNotApprovedNew(models.Model):
             )
 
     def status_color(self):
-        status_enum = Status(self.status)
-        return format_html(
+        if self.status:
+            status_enum = Status(self.status)
+            return format_html(
             '<span style="color: {};">{}</span>',
-            status_enum.color, status_enum.label
-        )
+                status_enum.color, status_enum.label
+            )
+        else:
+            return self.status
     status_color.short_description = 'Status'
 
 
@@ -166,6 +171,8 @@ class EventsNotApprovedProposed(models.Model):
         "Дата и время окончания мероприятия",
         null=True, blank=True, default=default_event_date
     )
+    score = models.IntegerField(verbose_name='total event score', null=True, blank=True)
+    score_breakdown = models.JSONField(verbose_name='event score by categories', null=True, blank=True)
 
     def __str__(self):
         return self.title
@@ -245,6 +252,8 @@ class Events2Post(models.Model):  # Table events for posting
         "event to_date", default=default_event_date
     )
     post_url = models.CharField(max_length=500, blank=True, null=True)
+    score = models.IntegerField(verbose_name='total event score', null=True, blank=True)
+    score_breakdown = models.JSONField(verbose_name='event score by categories', null=True, blank=True)
 
     def __str__(self):
         return self.title
