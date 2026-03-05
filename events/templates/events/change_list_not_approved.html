@@ -1,78 +1,156 @@
 {% extends 'admin/change_list.html' %}
+{% load static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        #result_list thead th { position: sticky; top: 0; background: #fff; z-index: 2; }
+        #result_list input.action-select, #action-toggle { transform: scale(1.15); cursor: pointer; }
+        #changelist-form .actions { position: sticky; top: 38px; background: #fff; z-index: 3; padding-top: 6px; padding-bottom: 6px; }
+        #result_list tbody tr { transition: background-color 0.15s; cursor: pointer; }
+        #result_list tbody tr:hover { background-color: #f0f4f8; }
+        #result_list tbody tr.selected-row { background-color: #fffde7; }
+        #result_list tbody tr.selected-row:hover { background-color: #fff9c4; }
+        #changelist-form .actions { display: flex; align-items: center; flex-wrap: wrap; }
+        .bulk-select-tools { display: inline-flex; gap: 4px; margin-left: auto; }
+    </style>
+    <script>
+        (function() {
+            function initBulkTools() {
+                var table = document.getElementById('result_list');
+                if (!table) return;
+
+                var tools = document.createElement('span');
+                tools.className = 'bulk-select-tools';
+                tools.innerHTML = '<a href="#" class="button" id="sel-all">Все</a>\
+                                   <a href="#" class="button" id="sel-none">Снять</a>\
+                                   <a href="#" class="button" id="sel-invert">Инверт.</a>';
+                var actionsBar = document.querySelector('#changelist-form .actions');
+                if (actionsBar) {
+                    actionsBar.appendChild(tools);
+                }
+
+                var checkboxes = table.querySelectorAll('tbody input.action-select');
+                var headerCheckbox = document.querySelector('input#action-toggle');
+
+                function toggleCb(cb, val) {
+                    if (val !== undefined) cb.checked = val; else cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event('change', {bubbles: true}));
+                    var row = cb.closest('tr'); if (row) row.classList.toggle('selected-row', cb.checked);
+                }
+                function setAll(val) { checkboxes.forEach(function(cb){ toggleCb(cb, val); }); if (headerCheckbox) headerCheckbox.checked = val; }
+                function invert() { checkboxes.forEach(function(cb){ toggleCb(cb); }); if (headerCheckbox) headerCheckbox.indeterminate = true; }
+
+                tools.querySelector('#sel-all').addEventListener('click', function(e){ e.preventDefault(); setAll(true); });
+                tools.querySelector('#sel-none').addEventListener('click', function(e){ e.preventDefault(); setAll(false); });
+                tools.querySelector('#sel-invert').addEventListener('click', function(e){ e.preventDefault(); invert(); });
+
+                table.querySelectorAll('tbody tr').forEach(function(row){
+                    row.addEventListener('click', function(e){
+                        if (e.target.closest('a[href], input, button, select, textarea')) return;
+                        var cb = row.querySelector('input.action-select');
+                        if (cb) toggleCb(cb);
+                    });
+                });
+
+                var lastChecked = null;
+                checkboxes.forEach(function(cb){
+                    cb.addEventListener('click', function(e){
+                        if (!lastChecked) { lastChecked = cb; return; }
+                        if (e.shiftKey) {
+                            var cbs = Array.from(checkboxes);
+                            var start = cbs.indexOf(cb);
+                            var end = cbs.indexOf(lastChecked);
+                            var lo = Math.min(start, end), hi = Math.max(start, end);
+                            for (var i = lo; i <= hi; i++) toggleCb(cbs[i], lastChecked.checked);
+                        }
+                        lastChecked = cb;
+                    });
+                });
+            }
+
+            function syncCounters() {
+                var counters = document.querySelectorAll('span.action-counter');
+                if (counters.length > 1) {
+                    var observer = new MutationObserver(function() {
+                        for (var i = 1; i < counters.length; i++) {
+                            counters[i].textContent = counters[0].textContent;
+                        }
+                    });
+                    observer.observe(counters[0], {childList: true, characterData: true, subtree: true});
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() { initBulkTools(); syncCounters(); });
+            } else {
+                initBulkTools();
+                syncCounters();
+            }
+        })();
+    </script>
+{% endblock %}
 
 {% block object-tools %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
     <script>
     function toggleSelection() {
-        const selectionDiv = document.getElementById('siteSelection');
-        if (selectionDiv.style.display === "none") {
-            selectionDiv.style.display = "flex";
-            document.getElementById('toggle_option').style.display = "none";
-        } else {
-            selectionDiv.style.display = "none";
-        }
+        var el = document.getElementById('siteSelection');
+        var hidden = el.style.display === '' || el.style.display === 'none';
+        el.style.display = hidden ? 'flex' : 'none';
+        document.getElementById('toggle_option').style.display = hidden ? 'none' : '';
     }
 
-    let sites = []
+    var sites = [];
 
     function addItem(site) {
-            if (!sites.includes(site)){
-                sites.push(site);
-                document.getElementById(site).style.display = "none";
-            }
+        if (!sites.includes(site)) {
+            sites.push(site);
+            document.getElementById(site).style.display = 'none';
         }
-
-    function eventsFromSites() {
-
-        //const selectedSites = Array.from(document.getElementById('sites').selectedOptions).map(option => option.value);
-        console.log(sites)
-            let data = {
-                csrfmiddlewaretoken: '{{ csrf_token }}',
-                api_url: 'api/new_event_from_sites/',
-                method: 'POST',
-                data: {
-                    'sites': sites.length > 0 ? sites : null,
-                    'days': 7
-                },
-            };
-
-            $.ajax({
-                    url: '{% url 'channel_api' %}',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(data),
-                    success: function(response) {
-
-                    }
-            })
-            const selectionDiv = document.getElementById('siteSelection');
-            selectionDiv.innerHTML  = "Request was sent. Wait 10-20 minutes";
     }
 
+    function eventsFromSites() {
+        var data = {
+            csrfmiddlewaretoken: '{{ csrf_token }}',
+            api_url: 'api/new_event_from_sites/',
+            method: 'POST',
+            data: {
+                'sites': sites.length > 0 ? sites : null,
+                'days': 7
+            },
+        };
 
+        $.ajax({
+            url: '{% url "channel_api" %}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function(response) {}
+        });
+        document.getElementById('siteSelection').innerHTML = 'Request was sent. Wait 10-20 minutes';
+    }
     </script>
 
-    <div>
-        <a class="button" href="{% url 'move_approved_events' %}">Move approved events</a>
-        <a class="button" href="{% url 'remove_old_events' %}">Remove old events</a>
-        <a class="button" href="{% url 'update_all' %}">Update all (move + delete)</a>
-         <a class="button" id="toggle_option" onclick="toggleSelection()">Request new events</a>
-
-    </div>
-    <p>
-        <div id="siteSelection" style="display:none; flex-wrap: wrap; gap: 8px; margin-top: 8px; max-width:80%; ">
-            <a class="button" id="request_events" onclick="eventsFromSites()" style="display:flex; background-color:green;">Request events!</a>
-            <a class="button" id="mts" onclick="addItem('mts')" style="display:flex;">MTS event</a>
-            <a class="button" id="vk" onclick="addItem('vk')" style="display:flex;">vk event</a>
-            <a class="button" id="timepad" onclick="addItem('timepad')" style="display:flex;">timepad event</a>
-            <a class="button" id="qtickets" onclick="addItem('qtickets')" style="display:flex;">qtickets event</a>
-            <a class="button" id="radario" onclick="addItem('radario')" style="display:flex;">radario event</a>
-            <a class="button" id="ticketscloud" onclick="addItem('ticketscloud')" style="display:flex;">ticketscloud event</a>
-            <a class="button" id="culture" onclick="addItem('culture')" style="display:flex;">culture event</a>
-            <a class="button" id="tg" onclick="addItem('tg')" style="display:flex;">tg post</a>
-            <a class="button" id="cfg" onclick="addItem('cfg')" style="display:flex;">sites events</a>
-        </div>
-    </p>
-    <br/>
     {{ block.super }}
+    <div style="overflow: hidden; margin-bottom: 8px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+            <a class="button" href="{% url 'move_approved_events' %}">Move approved events</a>
+            <a class="button" href="{% url 'remove_old_events' %}">Remove old events</a>
+            <a class="button" href="{% url 'update_all' %}">Update all (move + delete)</a>
+            <a class="button" id="toggle_option" onclick="toggleSelection()">Request new events</a>
+        </div>
+        <div id="siteSelection" style="display: none; flex-wrap: wrap; gap: 8px;">
+            <a class="button" id="request_events" onclick="eventsFromSites()" style="background-color:green;">Request events!</a>
+            <a class="button" id="mts" onclick="addItem('mts')">MTS event</a>
+            <a class="button" id="vk" onclick="addItem('vk')">vk event</a>
+            <a class="button" id="timepad" onclick="addItem('timepad')">timepad event</a>
+            <a class="button" id="qtickets" onclick="addItem('qtickets')">qtickets event</a>
+            <a class="button" id="radario" onclick="addItem('radario')">radario event</a>
+            <a class="button" id="ticketscloud" onclick="addItem('ticketscloud')">ticketscloud event</a>
+            <a class="button" id="culture" onclick="addItem('culture')">culture event</a>
+            <a class="button" id="tg" onclick="addItem('tg')">tg post</a>
+            <a class="button" id="cfg" onclick="addItem('cfg')">sites events</a>
+        </div>
+    </div>
 {% endblock %}
