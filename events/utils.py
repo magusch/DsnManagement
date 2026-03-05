@@ -365,3 +365,15 @@ def upload_image_event_to_s3(event_ids):
 
     if response.status_code == 200:
         return True
+
+
+def recalculate_scores(event_ids, table):
+    data = {
+        "api_url": "api/tasks/recalculate-scores/",
+        "method": "POST",
+        "data": {"table": table, "ids": event_ids, "force": True}
+    }
+    response = channel_api_request(data)
+
+    if response.status_code == 200:
+        return True

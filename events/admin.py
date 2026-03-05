@@ -103,7 +103,7 @@ class EventsAdmin(admin.ModelAdmin):
     list_display = ["title", "status_color_display", "from_date_order", open_url, "score"]
     list_filter = ["status", FromDateFilter, SourceFilter, "explored_date"]
     search_fields = ["title", "post"]
-    actions = ["approve_event", "moderate_events", "mark_as_rejected", "mark_as_spam", "mark_as_duplicate"]
+    actions = ["approve_event", "moderate_events", "recalculate_scores", "mark_as_rejected", "mark_as_spam", "mark_as_duplicate"]
     ordering = ["-explored_date", "-from_date"]
     readonly_fields = ('image_tag',)
 
@@ -190,6 +190,34 @@ class EventsAdmin(admin.ModelAdmin):
     def mark_as_duplicate(self, request, queryset):
         self._change_status(request, queryset, Status.DUPLICATE)
     mark_as_duplicate.short_description = "Mark as Duplicate"
+
+    def recalculate_scores(self, request, queryset):
+        ids = list(queryset.values_list('id', flat=True))
+        table = self.model._meta.db_table
+        answer = utils.recalculate_scores(ids, table)
+        if answer:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event was successfully added for score recalculation.",
+                    "%d events were successfully added for score recalculation.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                ngettext(
+                    "%d event wasn't added for score recalculation.",
+                    "%d events weren't added for score recalculation.",
+                    len(ids),
+                )
+                % len(ids),
+                messages.ERROR,
+            )
+    recalculate_scores.short_description = "Recalculate scores"
 
     def image_tag(self, obj):
         if obj.image_upload:
