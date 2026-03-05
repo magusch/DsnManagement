@@ -26,44 +26,42 @@ class Place(models.Model):
         return markdown_address
 
     def get_schedule_str(self):
-        weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вск']
+        weekday_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вск']
 
-        schedules = PlaceSchedule.objects.filter(place=self).order_by('weekday')
 
-        schedule_by_weekday = {}
+        schedules = self.schedules.filter(
+            weekday__isnull=False
+        ).order_by('weekday')
 
+        # Group days with similar hours working
+        time_to_days = {}
         for schedule in schedules:
-            if schedule.weekday is not None:
-                key = f"{schedule.open_time.strftime('%H:%M')}-{schedule.close_time.strftime('%H:%M')}"
-                if key in schedule_by_weekday.keys():
-                    schedule_by_weekday[key].append(schedule.weekday)
-                else:
-                    schedule_by_weekday[key] = [schedule.weekday]
+            key = f"{schedule.open_time.strftime('%H:%M')}-{schedule.close_time.strftime('%H:%M')}"
+            time_to_days.setdefault(key, []).append(schedule.weekday)
 
         result = []
-        for time_string, wkd_days in schedule_by_weekday.items():
-            day_string = weekdays[wkd_days[0]]
-            first_weekday = wkd_days[0]
-            last_weekday = wkd_days[0]
-            for i, day in enumerate(wkd_days):
-                if i == 0: continue
-                if last_weekday + 1 == day:
-                    last_weekday = day
-                elif i == len(wkd_days):
-                    day_string += f"-{weekdays[wkd_days[i]]}"
+        for time_string, days in time_to_days.items():
+            # Divide days by group (Пн-Ср, Сб-Вск)
+            groups = []
+            start = days[0]
+            end = days[0]
+            for day in days[1:]:
+                if day == end + 1:
+                    end = day
                 else:
-                    if first_weekday != last_weekday:
-                        day_string += f"-{weekdays[last_weekday]}"
-                    day_string += f", {weekdays[wkd_days[i]]}"
+                    groups.append((start, end))
+                    start = end = day
+            groups.append((start, end))
 
-                    first_weekday = wkd_days[i]
-                    last_weekday = wkd_days[i]
+            # Format day
+            parts = []
+            for start, end in groups:
+                if start == end:
+                    parts.append(weekday_names[start])
+                else:
+                    parts.append(f"{weekday_names[start]}-{weekday_names[end]}")
 
-            if first_weekday != last_weekday:
-                day_string += f"-{weekdays[last_weekday]}"
-            day_string += f" {time_string}"
-
-            result.append(day_string)
+            result.append(f"{', '.join(parts)} {time_string}")
 
         return "\n".join(result)
 
