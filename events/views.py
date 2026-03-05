@@ -282,7 +282,7 @@ def check_posts(request):
                     'event_id': event.event_id,
                     'title': event.title,
                     'errors': event.post_check(),
-                    'date_post': event.post_date.isoformat()
+                    'date_post': event.post_date.isoformat() if event.post_date else None
                 }
             )
 
@@ -296,10 +296,12 @@ def proxy_request_to_channel_api(request):
     if request.method == "POST":
 
         data = json.loads(request.body)
-        response = utils.channel_api_request(data)
+        response, error = utils.channel_api_request(data)
 
         if response:
             return JsonResponse(response.json(), status=response.status_code)
+        else:
+            return JsonResponse({"error": error}, status=502)
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
 

@@ -76,9 +76,10 @@ def refresh_posting_time(self, request, queryset):
     queryset : list
         список с записями в таблице.
     """
-    if re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}', str(request.body)): #'yyyy-mm-ddThh:mm'
-        last_date = datetime.fromisoformat(str(request.body))
-    else:
+    try:
+        body = request.body.decode('utf-8') if isinstance(request.body, bytes) else request.body
+        last_date = datetime.datetime.fromisoformat(body.strip())
+    except (ValueError, UnicodeDecodeError):
         last_date = None
 
     times = _postin_times(last_date)
@@ -125,10 +126,11 @@ def last_post_date():
         Events2Post.objects.filter(status="ReadyToPost").filter(post_date__isnull=False).order_by("-post_date").first()
     )
     if last_post_event:
-        last_queue = Events2Post.objects.order_by("-queue").first().queue
+        last_queue_event = Events2Post.objects.order_by("-queue").first()
+        last_queue = last_queue_event.queue if last_queue_event else 0
         try:
             post_time = good_post_time(last_post_event.post_date)
-        except:
+        except (AttributeError, ValueError, TypeError):
             post_time = good_post_time(timezone.now())
         return post_time, last_queue + 2
 
@@ -268,6 +270,8 @@ def empty_queryset():
 
 
 def delete_old_events(Events_model):
+    if Events_model == Events2Post:
+        return
     today = timezone.now()
     Events_model.objects.filter(to_date__lt=today).delete()
 
@@ -318,62 +322,62 @@ def channel_api_request(data):
     url = CHANNEL_API_URL + data['api_url']
     headers = {
         'Authorization': f"Bearer {CHANNEL_API_TOKEN}",
-        'Content-Type': 'application/json'
     }
+    method = data.get('method', 'GET').upper()
 
-    if data['method'] == 'POST':
-        response = requests.post(url, headers=headers, data=json.dumps(data['data']))
-    elif data['method'] == 'GET':
-        response = requests.get(url, headers=headers)
-    else:
-        response = requests.get(url, headers=headers)
+    try:
+        if method == 'POST':
+            response = requests.post(url, headers=headers, json=data.get('data'), timeout=30)
+        else:
+            response = requests.get(url, headers=headers, timeout=30)
+    except requests.RequestException as e:
+        return None, str(e)
 
-    return response
+    if response.status_code != 200:
+        try:
+            detail = response.json().get('detail', response.text)
+        except Exception:
+            detail = response.text
+        return response, f"HTTP {response.status_code}: {detail}"
+
+    return response, None
+
+
+def _api_call(data):
+    """Common wrapper: returns (success, error_message)."""
+    response, error = channel_api_request(data)
+    if error:
+        return False, error
+    return True, None
 
 
 def moderate_not_approved_events(event_ids):
-    data = {
+    return _api_call({
         "api_url": "api/ai_moderate_not_approved_events",
         "method": "POST",
         "data": {"ids": event_ids}
-    }
-    response = channel_api_request(data)
-
-    if response.status_code == 200:
-        return True
+    })
 
 
 def prepare_events(event_ids):
-    data = {
+    return _api_call({
         "api_url": "api/prepare_events",
         "method": "POST",
         "data": {"ids": event_ids}
-    }
-    response = channel_api_request(data)
-
-    if response.status_code == 200:
-        return True
+    })
 
 
 def upload_image_event_to_s3(event_ids):
-    data = {
+    return _api_call({
         "api_url": "api/upload_event_images_to_s3/",
         "method": "POST",
         "data": {"event_ids": event_ids}
-    }
-    response = channel_api_request(data)
-
-    if response.status_code == 200:
-        return True
+    })
 
 
 def recalculate_scores(event_ids, table):
-    data = {
+    return _api_call({
         "api_url": "api/tasks/recalculate-scores/",
         "method": "POST",
         "data": {"table": table, "ids": event_ids, "force": True}
-    }
-    response = channel_api_request(data)
-
-    if response.status_code == 200:
-        return True
+    })

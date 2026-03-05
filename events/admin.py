@@ -142,8 +142,8 @@ class EventsAdmin(admin.ModelAdmin):
 
     def moderate_events(self, request, queryset):
         ids = list(queryset.values_list('id', flat=True))
-        answer = utils.moderate_not_approved_events(ids)
-        if answer:
+        success, error = utils.moderate_not_approved_events(ids)
+        if success:
             self.message_user(
                 request,
                 ngettext(
@@ -157,12 +157,7 @@ class EventsAdmin(admin.ModelAdmin):
         else:
             self.message_user(
                 request,
-                ngettext(
-                    "%d event wasn't added for moderation AI process.",
-                    "%d events weren't added for moderation AI process.",
-                    len(ids),
-                )
-                % len(ids),
+                f"API error: {error}",
                 messages.ERROR,
             )
 
@@ -194,8 +189,8 @@ class EventsAdmin(admin.ModelAdmin):
     def recalculate_scores(self, request, queryset):
         ids = list(queryset.values_list('id', flat=True))
         table = self.model._meta.db_table
-        answer = utils.recalculate_scores(ids, table)
-        if answer:
+        success, error = utils.recalculate_scores(ids, table)
+        if success:
             self.message_user(
                 request,
                 ngettext(
@@ -209,12 +204,7 @@ class EventsAdmin(admin.ModelAdmin):
         else:
             self.message_user(
                 request,
-                ngettext(
-                    "%d event wasn't added for score recalculation.",
-                    "%d events weren't added for score recalculation.",
-                    len(ids),
-                )
-                % len(ids),
+                f"API error: {error}",
                 messages.ERROR,
             )
     recalculate_scores.short_description = "Recalculate scores"
@@ -438,8 +428,8 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     def prepare_events(self, request, queryset):
         ids = list(queryset.values_list('id', flat=True))
-        answer = utils.prepare_events(ids)
-        if answer:
+        success, error = utils.prepare_events(ids)
+        if success:
             self.message_user(
                 request,
                 ngettext(
@@ -453,19 +443,14 @@ class Events2PostAdmin(admin.ModelAdmin):
         else:
             self.message_user(
                 request,
-                ngettext(
-                    "%d event wasn't added for preparing to post.",
-                    "%d events weren't added for preparing to post.",
-                    len(ids),
-                )
-                % len(ids),
+                f"API error: {error}",
                 messages.ERROR,
             )
 
     def upload_image_s3(self, request, queryset):
         ids = list(queryset.values_list('id', flat=True))
-        answer = utils.upload_image_event_to_s3(ids)
-        if answer:
+        success, error = utils.upload_image_event_to_s3(ids)
+        if success:
             self.message_user(
                 request,
                 ngettext(
@@ -479,12 +464,7 @@ class Events2PostAdmin(admin.ModelAdmin):
         else:
             self.message_user(
                 request,
-                ngettext(
-                    "%d event wasn't added for uploading images to s3.",
-                    "%d events weren't added for uploading images to s3",
-                    len(ids),
-                )
-                % len(ids),
+                f"API error: {error}",
                 messages.ERROR,
             )
 
