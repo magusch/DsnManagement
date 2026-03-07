@@ -197,7 +197,8 @@ class EventsNotApprovedProposed(models.Model):
             super(EventsNotApprovedProposed, self).save(update_fields=['image'])
 
 
-status_color = {"ReadyToPost": "green", "Posted": "red", "ForFuture": 'blue', "Spam": "red", "Scrape": "purple"}
+status_color = {"ReadyToPost": "green", "Posted": "red", "ForFuture": 'blue', "Spam": "red", "Scrape": "purple",
+                "Error": "orange", "Rejected": "red"}
 
 
 def last_queue():
@@ -223,7 +224,7 @@ class Events2Post(models.Model):  # Table events for posting
     status = models.CharField(
         max_length=15,
         choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"), ("ForFuture", "For Future"),
-                 ("Spam", "Spam"), ("Scrape", "Scrape It")),
+                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected")),
         default="ReadyToPost",
         db_index=True
     )
