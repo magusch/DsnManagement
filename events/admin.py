@@ -3,7 +3,7 @@ from django.utils.translation import ngettext
 from django.utils.html import format_html
 from django.utils.http import urlencode
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, IntegerField
 
 import markdown
 
@@ -236,12 +236,12 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     list_display = [
         "title",
-        "queue",
         "post_date",
         "from_date_color",
         open_url,
         "status_color",
         # "post_check"
+        "queue",
     ]
 
     list_editable = ["queue", "post_date"]
@@ -288,7 +288,7 @@ class Events2PostAdmin(admin.ModelAdmin):
             return queryset
         if request.GET.get('all') == 'true':
             return queryset  # Show all events
-        return queryset.exclude(status='Posted')
+        return queryset.exclude(status__in=['Posted', 'Spam'])
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
@@ -326,7 +326,18 @@ class Events2PostAdmin(admin.ModelAdmin):
         return format_html(html_image+html_post + '</div>')
 
     def get_ordering(self, request):
-        return ["status", "queue"]
+        status_order = Case(
+            When(status='Error', then=Value(0)),
+            When(status='Posted', then=Value(1)),
+            When(status='ReadyToPost', then=Value(2)),
+            When(status='Scrape', then=Value(3)),
+            When(status='ForFuture', then=Value(4)),
+            When(status='Spam', then=Value(5)),
+            When(status='Rejected', then=Value(6)),
+            default=Value(7),
+            output_field=IntegerField(),
+        )
+        return [status_order, "queue"]
 
 
     def change_status_to_ReadyToPost(self, request, queryset):

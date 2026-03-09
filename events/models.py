@@ -277,7 +277,11 @@ class Events2Post(models.Model):  # Table events for posting
 
     def from_date_color(self):
         #from_date_color_html = ""
-        if self.status == 'ForFuture':
+        if self.status == 'Error':
+            from_date_color_html = f'<span style="color: Red;">{self.from_date.ctime()}</span>'
+        elif self.status == 'Rejected':
+            from_date_color_html = f'<span style="color: Gray;">{self.from_date.ctime()}</span>'
+        elif self.status == 'ForFuture':
             from_date_color_html = f'<span style="color: Blue;">{self.from_date.ctime()}</span>'
         elif self.status == 'Posted' or self.status == 'Spam' or self.from_date < timezone.now():
             from_date_color_html = f'<span style="color: Red;">{self.from_date.ctime()}</span>'
