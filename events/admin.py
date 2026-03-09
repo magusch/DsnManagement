@@ -241,10 +241,10 @@ class Events2PostAdmin(admin.ModelAdmin):
         open_url,
         "status_color",
         "queue",
-        "main_category_id",
+        "main_category",
     ]
 
-    list_editable = ["queue", "post_date"]
+    list_editable = ["queue", "post_date", "main_category"]
     search_fields = ["title", "post", "address"]
     actions = [
         "prepare_events",
