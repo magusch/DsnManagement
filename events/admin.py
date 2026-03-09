@@ -5,7 +5,6 @@ from django.utils.http import urlencode
 from django.utils import timezone
 from django.db.models import Q, Case, When, Value, IntegerField
 
-import markdown
 
 from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event, Status
 
@@ -238,10 +237,11 @@ class Events2PostAdmin(admin.ModelAdmin):
         "title",
         "post_date",
         "from_date_color",
+        "post_issues",
         open_url,
         "status_color",
-        # "post_check"
         "queue",
+        "main_category_id",
     ]
 
     list_editable = ["queue", "post_date"]
@@ -317,13 +317,11 @@ class Events2PostAdmin(admin.ModelAdmin):
         return f'{base_url}?{query_string}'
 
     def markdown_post_view(self, instance):
-        html_image = f"<div style='width:325px;'><img src='{instance.image}' width='325px'>"
-        html_post = markdown.markdown(instance.post
-                                      .replace('*','**')
-                                      .replace("\n", "<br>")
-                                      .replace('_','*')
-                                      )
-        return format_html(html_image+html_post + '</div>')
+        return instance.markdown_post_view_model()
+
+    def post_issues(self, obj):
+        return obj.post_check_html()
+    post_issues.short_description = 'Issues'
 
     def get_ordering(self, request):
         status_order = Case(
@@ -417,14 +415,13 @@ class Events2PostAdmin(admin.ModelAdmin):
         )
 
     def text_post_check(self, request, queryset):
-        text = '%d events:'
-        updated = queryset.count()
+        text = '%d events with issues:'
+        updated = 0
         for obj in queryset:
             check_result = obj.post_check()
             if check_result:
-                text += f" {obj.title} – {obj.post_check()};"
-            else:
-                updated = updated-1
+                text += f" {obj.title} – {check_result};"
+                updated += 1
 
         self.message_user(
             request,

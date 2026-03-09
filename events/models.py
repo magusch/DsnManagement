@@ -8,7 +8,6 @@ from django.utils.translation import gettext_lazy as _
 
 import random
 
-import markdown
 
 from place.models import Place
 from category.models import SubCategory, Category
@@ -297,14 +296,45 @@ class Events2Post(models.Model):  # Table events for posting
 
         return format_html(from_date_color_html)
 
+    @staticmethod
+    def _tg_markdown_to_html(text):
+        """Convert Telegram MarkdownV1 to HTML, preserving links."""
+        # Protect markdown links: [text](url) -> placeholder
+        links = []
+        def _save_link(m):
+            links.append((m.group(1), m.group(2)))
+            return f'\x00LINK{len(links) - 1}\x00'
+        text = re.sub(r'\[([^\]]*)\]\(([^)]*)\)', _save_link, text)
+
+        # Remove escape characters (\* \_ \`)
+        text = text.replace(r'\*', '\x01STAR\x01')
+        text = text.replace(r'\_', '\x01UNDER\x01')
+        text = text.replace(r'\`', '\x01BACKTICK\x01')
+
+        # Convert formatting: *bold* -> <b>, _italic_ -> <i>
+        text = re.sub(r'\*([^*]+)\*', r'<b>\1</b>', text)
+        text = re.sub(r'_([^_]+)_', r'<i>\1</i>', text)
+
+        # Restore escaped characters
+        text = text.replace('\x01STAR\x01', '*')
+        text = text.replace('\x01UNDER\x01', '_')
+        text = text.replace('\x01BACKTICK\x01', '`')
+
+        # Restore links
+        for i, (link_text, url) in enumerate(links):
+            text = text.replace(
+                f'\x00LINK{i}\x00',
+                f'<a href="{url}" target="_blank">{link_text}</a>'
+            )
+
+        # Newlines to <br>
+        text = text.replace('\n', '<br>')
+        return text
+
     def markdown_post_view_model(self):
         html_image = f"<div id='markdown_post' style='width:325px;'><img src='{self.image}' width='325px'>"
-        html_post = markdown.markdown(self.post
-                                      .replace('*','**')
-                                      .replace("\n", "<br>")
-                                      .replace('_','*')
-                                      )
-        return format_html(html_image+html_post + '</div>')
+        html_post = self._tg_markdown_to_html(self.post)
+        return format_html(html_image + html_post + '</div>')
 
     def address_markdown(self):
         return self.place.markdown_address()
@@ -327,14 +357,13 @@ class Events2Post(models.Model):  # Table events for posting
         return new_maked_event
 
     def post_check(self):
-        post_checker = PostChecker(self.post)
-        post_checker.place_empty(self.place)
-        result_checker = post_checker.result
+        checker = PostChecker(self)
+        return checker.summary()
 
-        result_brief = ''
-        for key in result_checker.keys():
-            result_brief += key
-        return result_brief
+    def post_check_html(self):
+        checker = PostChecker(self)
+        return format_html(checker.icons_html()) if checker.errors else ''
+    post_check_html.short_description = 'Issues'
 
 
     def clean(self):
