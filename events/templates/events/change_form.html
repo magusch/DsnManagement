@@ -24,7 +24,7 @@
 {% endif %}
 
 {% block content %}<div id="content-main">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
 
 {% comment %} Provide URLs via data-* so JS has no template tags {% endcomment %}
 <div id="ai-url-config"
