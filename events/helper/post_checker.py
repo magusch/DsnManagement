@@ -1,20 +1,24 @@
 import re
 
+# Custom emoji: ![alt](tg://emoji?id=123)
+_CUSTOM_EMOJI_RE = re.compile(r'!\[([^\]]*)\]\(tg://emoji\?id=\d+\)')
 # Regex to match markdown links [text](url) and raw URLs
 _LINK_RE = re.compile(r'\[([^\]]*)\]\([^)]*\)')
 _URL_RE = re.compile(r'https?://\S+')
-# Escaped markdown characters like \* or \_
-_ESCAPED_RE = re.compile(r'\\[*_`]')
+# Any escaped character \X (MarkdownV2 escapes all special chars)
+_ESCAPED_RE = re.compile(r'\\.')
 
 CRITICAL_ICON = '<span style="color:red" title="{title}">{symbol}</span>'
 WARNING_ICON = '<span style="color:orange" title="{title}">{symbol}</span>'
 
 
 def _strip_non_markdown(text):
-    """Remove URLs, markdown links, and escaped chars so only real formatting remains."""
-    text = _LINK_RE.sub(r'\1', text)  # [text](url) -> text
+    """Remove custom emoji, URLs, markdown links, and escaped chars
+    so only real formatting remains."""
+    text = _CUSTOM_EMOJI_RE.sub(r'\1', text)  # ![alt](tg://emoji?id=...) -> alt
+    text = _LINK_RE.sub(r'\1', text)           # [text](url) -> text
     text = _URL_RE.sub('', text)
-    text = _ESCAPED_RE.sub('', text)  # \* \_ \` -> gone
+    text = _ESCAPED_RE.sub('', text)           # \* \_ \. \! etc -> gone
     return text
 
 
@@ -40,6 +44,8 @@ class PostChecker:
     def _run_checks(self):
         self._check_asterisks()
         self._check_underscores()
+        self._check_tildes()
+        self._check_pipes()
         self._check_all_bold()
         self._check_length()
         self._check_full_text_empty()
@@ -58,6 +64,16 @@ class PostChecker:
         count = self.clean_post.count('_')
         if count % 2 != 0:
             self._add('_', f"Odd number of _ ({count})")
+
+    def _check_tildes(self):
+        count = self.clean_post.count('~')
+        if count % 2 != 0:
+            self._add('~', f"Odd number of ~ ({count})")
+
+    def _check_pipes(self):
+        count = self.clean_post.count('||')
+        if count % 2 != 0:
+            self._add('|', f"Odd number of || ({count})")
 
     def _check_all_bold(self):
         lines = self.clean_post.strip().split('\n')

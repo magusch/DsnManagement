@@ -3,6 +3,7 @@ import re, os
 from place.utils import address_from_places, place_orm_object
 
 from .datetime_helper import weekday_name, month_name
+from .markdown_v2 import escape_v2, escape_v2_url
 
 from category.models import SubCategory
 
@@ -77,11 +78,10 @@ class PostHelper:
 
     def _title_markdown(self):
         title = self.event.title
-        title = title.replace("`", r"\`").replace("_", r"\_").replace("*", r"\*")
-
-        # title = re.sub(r"[\"'‘](?=[^\ \.!\n])", "«", title)
-        # title = re.sub(r"[\"'‘](?=[^a-zA-Zа-яА-Я0-9]|$)", "»", title)
-        title = re.sub(r'["\'](\S.*?)["\']', r'«\1»', title)
+        # Replace quotes with guillemets before escaping
+        title = re.sub(r"[\"’](\S.*?)[\"’]", r"«\1»", title)
+        # Escape all V2 special chars in the title text
+        title = escape_v2(title)
 
         if '«' in title and '»' in title:
             pattern = r'(«[^»]*»)'
@@ -113,12 +113,7 @@ class PostHelper:
         else:
             post_text = self.reduce_text(self.event.prepared_text)
 
-        post_text = (
-            post_text.strip()
-                .replace("`", r"\`")
-                .replace("_", r"\_")
-                .replace("*", r"\*")
-        )
+        post_text = escape_v2(post_text.strip())
 
         address_line = self.address_markdown()
 
@@ -127,19 +122,23 @@ class PostHelper:
 
         remind_link = ''
         if TELEGRAM_BOT_NAME is not None and hasattr(self.event, 'id'):
-            remind_link = f"|| [Сохранить в боте](https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id})"
+            bot_url = escape_v2_url(f"https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id}")
+            remind_link = f"|| [Сохранить в боте]({bot_url})"
 
         if hasattr(self.event, 'ticket_url') and self.event.ticket_url:
             event_url = self.event.ticket_url
         else:
             event_url = self.event.url
 
+        escaped_price = escape_v2(self.event.price)
+        escaped_event_url = escape_v2_url(event_url)
+        escaped_date = escape_v2(date_from_to)
 
         footer = (
             "\n\n"
             f"*Где:* {address_line}\n"
-            f"*Когда:* {date_from_to} \n"
-            f"*Вход:* [{self.event.price}]({event_url})"
+            f"*Когда:* {escaped_date} \n"
+            f"*Вход:* [{escaped_price}]({escaped_event_url})"
             f"\n\n{footer_link} {remind_link}"
         )
 
@@ -170,11 +169,12 @@ class PostHelper:
                 if hasattr(self.event, 'place_id'):
                     self.event.place_id = addresses[0].place.id
             else:
+                escaped_addr = escape_v2(self.event.address)
                 if need_address_line_url:
-                    address_line = \
-                        f"[{self.event.address}](https://2gis.ru/spb/search/{self.event.address})"
+                    addr_url = escape_v2_url(f"https://2gis.ru/spb/search/{self.event.address}")
+                    address_line = f"[{escaped_addr}]({addr_url})"
                 else:
-                    address_line = self.event.address
+                    address_line = escaped_addr
 
         return address_line
 

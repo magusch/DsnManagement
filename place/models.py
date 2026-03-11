@@ -2,6 +2,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 
+from events.helper.markdown_v2 import escape_v2, escape_v2_url
+
 
 class Place(models.Model):
     place_name = models.CharField(max_length=500)
@@ -14,14 +16,18 @@ class Place(models.Model):
     place_city = models.CharField(max_length=500, default='SPb', blank=True,)
 
     def markdown_address(self, with_url=True):
+        name = escape_v2(self.place_name)
+        address = escape_v2(self.place_address)
         markdown_address = ''
         if self.url_to_address != '' and with_url is True:
-            markdown_address += f"[{self.place_name}, {self.place_address}]({self.url_to_address})"
+            url = escape_v2_url(self.url_to_address)
+            markdown_address += f"[{name}, {address}]({url})"
         else:
-            markdown_address += f"{self.place_name}, {self.place_address}"
+            markdown_address += f"{name}, {address}"
 
         if self.place_metro != '':
-            markdown_address += f", м.{self.place_metro}"
+            metro = escape_v2(self.place_metro)
+            markdown_address += f", м\\.{metro}"
 
         return markdown_address
 
