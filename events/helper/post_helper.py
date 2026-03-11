@@ -118,12 +118,15 @@ class PostHelper:
         address_line = self.address_markdown()
 
         footer_link = self.param_manager.get_parameter('finish_link')
-        if not footer_link: footer_link = ''
+        if not footer_link:
+            footer_link = ''
+        else:
+            footer_link = escape_v2(footer_link)
 
         remind_link = ''
         if TELEGRAM_BOT_NAME is not None and hasattr(self.event, 'id'):
             bot_url = escape_v2_url(f"https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id}")
-            remind_link = f"|| [Сохранить в боте]({bot_url})"
+            remind_link = f"\\|\\| [Сохранить в боте]({bot_url})"
 
         if hasattr(self.event, 'ticket_url') and self.event.ticket_url:
             event_url = self.event.ticket_url
