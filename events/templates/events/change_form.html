@@ -49,6 +49,46 @@
 
         let initial_event
 
+        function parsePriceInt(priceText) {
+            if (!priceText) return null;
+            var text = priceText.trim().toLowerCase();
+            if (['бесплатно', 'free', 'вход свободный', 'свободный вход'].some(function(kw) { return text.indexOf(kw) !== -1; })) return 0;
+            var nums = text.replace(/\s/g, '').match(/\d+/);
+            return nums ? parseInt(nums[0], 10) : null;
+        }
+
+        function applyResponseData(data) {
+            for (var key in data) {
+                if (!data.hasOwnProperty(key)) continue;
+                var value = data[key];
+                if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.indexOf('T') !== -1) {
+                    try {
+                        var dateObj = new Date(value);
+                        var dateStr = dateObj.toISOString().split('T')[0];
+                        var timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5);
+                        var dateEl = document.getElementById('id_' + key + '_0');
+                        var timeEl = document.getElementById('id_' + key + '_1');
+                        if (dateEl) dateEl.value = dateStr;
+                        if (timeEl) timeEl.value = timeStr;
+                    } catch (e) {
+                        var el = document.getElementById('id_' + key);
+                        if (el) el.value = value;
+                    }
+                } else {
+                    var el = document.getElementById('id_' + key);
+                    if (el) el.value = value;
+                }
+            }
+            // Auto-fill price_int from price if not already in response
+            if (data.price && !data.price_int) {
+                var priceInt = parsePriceInt(data.price);
+                if (priceInt !== null) {
+                    var priceIntEl = document.getElementById('id_price_int');
+                    if (priceIntEl) priceIntEl.value = priceInt;
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             initial_event = getEventValues()
         }, false);
@@ -76,40 +116,7 @@
                 dataType: 'json',
                 data,
                 success: function(response) {
-
-                    // Put all data from remake_post_url in fields with id="id_#{key}"
-                    let data = response;
-                    for (const key in data) {
-                        if (data.hasOwnProperty(key)) {
-                            const value = data[key];
-                            
-                            // Handle datetime fields that come as ISO strings like '2025-09-26T22:00'
-                            if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.includes('T')) {
-                                try {
-                                    const dateObj = new Date(value);
-                                    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
-                                    const timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
-                                    
-                                    const dateElement = document.getElementById(`id_${key}_0`);
-                                    const timeElement = document.getElementById(`id_${key}_1`);
-                                    
-                                    if (dateElement) dateElement.value = dateStr;
-                                    if (timeElement) timeElement.value = timeStr;
-                                } catch (e) {
-                                    console.warn(`Failed to parse datetime ${key}: ${value}`, e);
-                                    // Fallback to setting as regular field
-                                    const element = document.getElementById(`id_${key}`);
-                                    if (element) element.value = value;
-                                }
-                            } else {
-                                // Regular field
-                                const element = document.getElementById(`id_${key}`);
-                                if (element) {
-                                    element.value = value;
-                                }
-                            }
-                        }
-                    }
+                    applyResponseData(response);
                 },
                 error: function(xhr, status, error) {
                     console.error(error);
@@ -133,38 +140,7 @@
                 data,
                 success: function(response) {
                     setAiStatus('Результат успешно получен. Обновление данных.', 'green');
-                    var data = response[0];
-                    for (const key in data) {
-                        if (data.hasOwnProperty(key)) {
-                            const value = data[key];
-                            
-                            // Handle datetime fields that come as ISO strings like '2025-09-26T22:00'
-                            if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.includes('T')) {
-                                try {
-                                    const dateObj = new Date(value);
-                                    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
-                                    const timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
-                                    
-                                    const dateElement = document.getElementById(`id_${key}_0`);
-                                    const timeElement = document.getElementById(`id_${key}_1`);
-                                    
-                                    if (dateElement) dateElement.value = dateStr;
-                                    if (timeElement) timeElement.value = timeStr;
-                                } catch (e) {
-                                    console.warn(`Failed to parse datetime ${key}: ${value}`, e);
-                                    // Fallback to setting as regular field
-                                    const element = document.getElementById(`id_${key}`);
-                                    if (element) element.value = value;
-                                }
-                            } else {
-                                // Regular field
-                                const element = document.getElementById(`id_${key}`);
-                                if (element) {
-                                    element.value = value;
-                                }
-                            }
-                        }
-                    }
+                    applyResponseData(response[0]);
                     setAiStatus('Данные обновлены.', 'green');
                 },
                 error: function(xhr, status, error) {
@@ -254,37 +230,7 @@
                             if (result) {
                                 if(result['status']==='success') {
                                     let data = result['result'];
-                                    for (const key in data) {
-                                        if (data.hasOwnProperty(key)) {
-                                            const value = data[key];
-                                            
-                                            // Handle datetime fields that come as ISO strings like '2025-09-26T22:00'
-                                            if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.includes('T')) {
-                                                try {
-                                                    const dateObj = new Date(value);
-                                                    const dateStr = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
-                                                    const timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
-                                                    
-                                                    const dateElement = document.getElementById(`id_${key}_0`);
-                                                    const timeElement = document.getElementById(`id_${key}_1`);
-                                                    
-                                                    if (dateElement) dateElement.value = dateStr;
-                                                    if (timeElement) timeElement.value = timeStr;
-                                                } catch (e) {
-                                                    console.warn(`Failed to parse datetime ${key}: ${value}`, e);
-                                                    // Fallback to setting as regular field
-                                                    const element = document.getElementById(`id_${key}`);
-                                                    if (element) element.value = value;
-                                                }
-                                            } else {
-                                                // Regular field
-                                                const element = document.getElementById(`id_${key}`);
-                                                if (element) {
-                                                    element.value = value;
-                                                }
-                                            }
-                                        }
-                                    }
+                                    applyResponseData(data);
                                     setAiStatus('Готово: обновлено успешно', 'green');
                                     setAiDetail(data);
                                     clearInterval(interval);

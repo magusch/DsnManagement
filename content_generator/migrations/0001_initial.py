@@ -295,6 +295,7 @@ class Migration(migrations.Migration):
                 on_delete=django.db.models.deletion.CASCADE,
                 to="content_generator.filterset",
                 verbose_name="Набор фильтров",
+                blank=True, null=True,
             ),
         ),
         migrations.AddField(

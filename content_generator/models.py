@@ -39,7 +39,7 @@ class EventSelection(models.Model):
     ]
 
     name = models.CharField(max_length=200, verbose_name='Название подборки')
-    filter_set = models.ForeignKey(FilterSet, on_delete=models.CASCADE, verbose_name='Набор фильтров')
+    filter_set = models.ForeignKey(FilterSet, on_delete=models.CASCADE, verbose_name='Набор фильтров', blank=True, null=True)
     selected_events = models.ManyToManyField(Events2Post, verbose_name='Выбранные мероприятия', blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, editable=False, default=1, null=True)

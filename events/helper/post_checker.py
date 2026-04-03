@@ -50,6 +50,7 @@ class PostChecker:
         self._check_length()
         self._check_full_text_empty()
         self._check_price()
+        self._check_image()
         self._check_place()
         self._check_category()
 
@@ -108,6 +109,11 @@ class PostChecker:
             is_free = 'бесплатно' in price or 'free' in price
             if not has_digits and not is_free:
                 self._add('$', f"Unclear price: '{self.event.price}'")
+
+    def _check_image(self):
+        image = (self.event.image or '').strip()
+        if not image:
+            self._add('🖼', "No image")
 
     # --- Warning checks (minor) ---
 
