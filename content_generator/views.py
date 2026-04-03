@@ -61,22 +61,35 @@ def _generate_locally(event_ids, template_id, max_events):
     except (ValueError, TypeError):
         max_events = 15
 
+    try:
+        int_ids = [int(eid) for eid in event_ids]
+    except (ValueError, TypeError) as e:
+        logger.error("[LOCAL] Bad event_ids: %s — %s", event_ids, e)
+        return JsonResponse({"error": f"Некорректные ID событий: {event_ids}"}, status=400)
+
     if not template_id:
         return JsonResponse({"error": "Выберите шаблон для локальной генерации"}, status=400)
 
     try:
         template = PostTemplate.objects.get(id=template_id)
     except PostTemplate.DoesNotExist:
+        logger.error("[LOCAL] Template id=%s not found", template_id)
         return JsonResponse({"error": "Шаблон не найден"}, status=400)
 
     from events.models import Events2Post
-    events = Events2Post.objects.filter(id__in=event_ids)[:max_events]
+    events = list(Events2Post.objects.select_related('place').filter(id__in=int_ids)[:max_events])
     content = generate_post(events, template.template_text)
+
+    logger.info("[LOCAL] %d events, content length=%d", len(events), len(content))
+
+    if not content:
+        logger.warning("[LOCAL] Empty content for ids=%s", int_ids)
+        return JsonResponse({"error": "Не удалось сгенерировать пост — события не найдены"}, status=400)
 
     return JsonResponse({
         "status": "success",
         "content": content,
-        "total_count": len(event_ids),
+        "total_count": len(int_ids),
         "fallback": True,
     })
 
@@ -89,27 +102,19 @@ def _send_to_api(api_url, payload):
         "data": payload,
     }
 
-    print(f"[API →] {api_url}  payload={payload}")
-
     response, error = channel_api_request(data)
     if error:
-        print(f"[API ✗] {api_url}  error={error}")
+        logger.warning("[API] %s error: %s", api_url, error)
         return None, error
 
     try:
         result = response.json()
     except Exception:
-        print(f"[API ✗] {api_url}  non-json body={response.text[:500]}")
+        logger.error("[API] %s non-json response: %s", api_url, response.text[:300])
         return None, "Невалидный ответ от API"
 
-    print(f"[API ←] {api_url}  result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}")
-    if isinstance(result, dict) and 'content' in result:
-        print(f"[API ←] content length={len(result['content'])}")
-    if isinstance(result, dict) and 'result' in result and isinstance(result['result'], dict):
-        r = result['result']
-        print(f"[API ←] result.keys={list(r.keys())}")
-        if 'content' in r:
-            print(f"[API ←] result.content length={len(r['content'])}")
+    logger.info("[API] %s → %s", api_url,
+                list(result.keys()) if isinstance(result, dict) else type(result))
     return result, None
 
 
@@ -149,10 +154,17 @@ def generate_post_api_view(request):
     title = request.POST.get("title", "")
     is_fallback = request.POST.get("fallback") == "1"
 
+    logger.info("[GENERATE] method=%s events=%d fallback=%s", method, len(event_ids), is_fallback)
+
     if not event_ids:
         return JsonResponse({"error": "Не выбрано ни одного мероприятия"}, status=400)
 
     int_event_ids = [int(eid) for eid in event_ids]
+
+    # Fallback — skip API entirely, generate locally
+    if is_fallback:
+        logger.info("[GENERATE] Fallback to local generation")
+        return _generate_locally(int_event_ids, template_id, max_events)
 
     # Create EventSelection so API can reference it by ID
     from events.models import Events2Post
@@ -188,8 +200,9 @@ def generate_post_api_view(request):
 
     result, error = _send_to_api(api_url, payload)
     if error:
-        if method == "code" or is_fallback:
-            return _generate_locally(event_ids, template_id, max_events)
+        logger.info("[GENERATE] API failed, falling back locally")
+        if method == "code":
+            return _generate_locally(int_event_ids, template_id, max_events)
         return JsonResponse({"error": f"Ошибка API: {error}"}, status=502)
 
     return _api_result_to_response(result, event_ids)
@@ -211,7 +224,7 @@ def check_task_view(request):
 
     response, error = channel_api_request(data)
     if error:
-        print(f"[POLL ✗] task={task_id}  error={error}")
+        logger.warning("[POLL] task=%s error: %s", task_id, error)
         return JsonResponse({"error": error}, status=502)
 
     try:
@@ -219,14 +232,9 @@ def check_task_view(request):
     except Exception:
         return JsonResponse({"error": "Невалидный ответ"}, status=502)
 
-    print(f"[POLL ←] task={task_id}  keys={list(result.keys()) if isinstance(result, dict) else type(result)}")
-    if isinstance(result, dict) and 'result' in result and isinstance(result['result'], dict):
-        r = result['result']
-        print(f"[POLL ←] result.keys={list(r.keys())}")
-        if 'content' in r:
-            print(f"[POLL ←] result.content length={len(r['content'])}")
-            print(f"[POLL ←] content first 200={r['content'][:200]}")
-            print(f"[POLL ←] content last 200={r['content'][-200:]}")
+    status = result.get("status", "?") if isinstance(result, dict) else "?"
+    if status not in ("pending", "processing"):
+        logger.info("[POLL] task=%s status=%s", task_id, status)
     return JsonResponse(result)
 
 
@@ -237,49 +245,63 @@ def save_post_view(request):
     event_ids = request.POST.get("event_ids", "")
     title = request.POST.get("title", "")
 
+    logger.info("[SAVE] title=%s content_len=%d event_ids=%s",
+                title[:50], len(content), event_ids[:100])
+
     if not content:
-        return JsonResponse({"error": "Нет контента для сохранения"}, status=400)
+        return render(request, "content_generator/partials/save_result.html", {
+            "error": "Нет контента для сохранения",
+        })
 
     if not title:
         from django.utils import timezone
         title = f"Подборка от {timezone.now().strftime('%d.%m.%Y %H:%M')}"
 
-    event_id_list = [eid for eid in event_ids.split(",") if eid]
-
-    selection = None
-    if event_id_list:
-        from events.models import Events2Post
-        selection = EventSelection.objects.create(
-            name=title,
-            filter_set=FilterSet.objects.first(),
-            status="completed",
-            created_by=request.user,
-        )
-        events = Events2Post.objects.filter(id__in=event_id_list)
-        selection.selected_events.set(events)
-
-    import json
     try:
-        media_files = json.loads(request.POST.get("media_files", "[]"))
-    except (json.JSONDecodeError, TypeError):
-        media_files = []
+        event_id_list = [eid for eid in event_ids.split(",") if eid]
 
-    image = request.POST.get("image", "") or None
+        selection = None
+        if event_id_list:
+            from events.models import Events2Post
+            selection = EventSelection.objects.create(
+                name=title,
+                filter_set=FilterSet.objects.first(),
+                status="completed",
+                created_by=request.user,
+            )
+            events = Events2Post.objects.filter(id__in=event_id_list)
+            selection.selected_events.set(events)
+            logger.info("[SAVE] Selection id=%s, events=%d", selection.id, events.count())
 
-    post = GeneratedPost.objects.create(
-        event_selection=selection,
-        title=title,
-        content=content,
-        image=image,
-        media_files=media_files,
-        status="draft",
-        generated_by=request.user,
-    )
+        import json
+        try:
+            media_files = json.loads(request.POST.get("media_files", "[]"))
+        except (json.JSONDecodeError, TypeError):
+            media_files = []
 
-    from django.urls import reverse
-    admin_url = reverse("admin:content_generator_generatedpost_change", args=[post.id])
+        image = request.POST.get("image", "") or None
 
-    return render(request, "content_generator/partials/save_result.html", {
-        "post": post,
-        "admin_url": admin_url,
-    })
+        post = GeneratedPost.objects.create(
+            event_selection=selection,
+            title=title,
+            content=content,
+            image=image,
+            media_files=media_files,
+            status="draft",
+            generated_by=request.user,
+        )
+        logger.info("[SAVE] Post created id=%s", post.id)
+
+        from django.urls import reverse
+        admin_url = reverse("admin:content_generator_generatedpost_change", args=[post.id])
+
+        return render(request, "content_generator/partials/save_result.html", {
+            "post": post,
+            "admin_url": admin_url,
+        })
+
+    except Exception as e:
+        logger.exception("[SAVE] Error saving post: %s", e)
+        return render(request, "content_generator/partials/save_result.html", {
+            "error": f"Ошибка сохранения: {e}",
+        })

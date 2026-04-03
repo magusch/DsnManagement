@@ -431,6 +431,7 @@
     }
 
     function showPostResult(content, eventIds, method, fallback, extra) {
+        content = (content === undefined || content === null) ? '' : content;
         extra = extra || {};
         var badge = method === 'ai'
             ? '<span class="info-badge info">ИИ</span>'
@@ -505,9 +506,10 @@
                         image: r.image || data.image || '',
                         title: r.title || data.title || ''
                     });
-                } else if (data.status === 'error') {
+                } else if (data.error || data.status === 'error' || data.status === 'failed') {
                     clearInterval(interval);
-                    setStatus('API ошибка: ' + (data.message || 'неизвестная ошибка') + '. Пробую локально...', '#b36b00');
+                    var errMsg = data.error || data.message || 'неизвестная ошибка';
+                    setStatus('API ошибка: ' + errMsg + '. Пробую локально...', '#b36b00');
                     fallbackLocal(eventIds, method);
                 }
                 // else still pending — keep polling
@@ -548,7 +550,7 @@
             if (data.error) {
                 setPreview('<p class="error-msg">' + data.error + '</p>');
             } else {
-                showPostResult(data.content, eventIdsStr, 'code', true);
+                showPostResult(data.content || '', eventIdsStr, 'code', true);
             }
         })
         .catch(function(err) {
@@ -579,22 +581,23 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
-                // API returned error — try fallback
                 setStatus('API: ' + data.error + '. Пробую локально...', '#b36b00');
                 fallbackLocal(eventIdsStr, method);
             } else if (data.task_id) {
-                // Async task — start polling
                 setStatus('Задача отправлена. Ожидание результата...', '#333');
                 pollTask(data.task_id, eventIdsStr, method);
-            } else if (data.content) {
-                // Direct result
-                showPostResult(data.content, eventIdsStr, method, false, {
+            } else if (data.content !== undefined) {
+                showPostResult(data.content || '', eventIdsStr, method, false, {
                     image: data.image || '',
                     title: data.title || ''
                 });
+            } else {
+                console.warn('[CG] Unexpected response:', Object.keys(data));
+                setPreview('<p class="error-msg">Пустой ответ от сервера</p>');
             }
         })
         .catch(function(err) {
+            console.error('[CG]', err);
             setStatus('Нет связи с сервером. Пробую локально...', '#b36b00');
             fallbackLocal(eventIdsStr, method);
         });

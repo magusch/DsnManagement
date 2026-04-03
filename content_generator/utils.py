@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+from django.utils import timezone as django_tz
+
 from events.helper.datetime_helper import weekday_name, month_name
 from events.utils import channel_api_request
 
@@ -24,9 +26,16 @@ def _safe_attr(obj, path, default=""):
         return default
 
 
+def _to_local(dt):
+    """Convert aware datetime to local timezone."""
+    if dt is None:
+        return None
+    return django_tz.localtime(dt)
+
+
 def _format_event_date(event):
     """Human-readable date: 'Сб, 16 марта 14:00' or 'Сб, 16 марта — Вск, 17 марта'."""
-    date_from = event.from_date
+    date_from = _to_local(event.from_date)
     if not date_from:
         return ""
 
@@ -36,7 +45,7 @@ def _format_event_date(event):
     hour = date_from.hour
     minute = date_from.minute
 
-    date_to = event.to_date
+    date_to = _to_local(event.to_date)
 
     if date_to is None or date_from.date() == date_to.date():
         # Same day or no end date
@@ -118,12 +127,12 @@ def _build_event_context(event):
     ctx["location"] = location
     ctx["metro"] = metro
 
-    # Dates — human-readable
+    # Dates — human-readable (in local timezone)
     ctx["event_date"] = _format_event_date(event)
     if event.from_date:
-        ctx["from_date"] = event.from_date.strftime("%d.%m.%Y %H:%M")
+        ctx["from_date"] = _to_local(event.from_date).strftime("%d.%m.%Y %H:%M")
     if event.to_date:
-        ctx["to_date"] = event.to_date.strftime("%d.%m.%Y %H:%M")
+        ctx["to_date"] = _to_local(event.to_date).strftime("%d.%m.%Y %H:%M")
 
     return ctx
 

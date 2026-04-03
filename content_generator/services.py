@@ -7,25 +7,23 @@ from datetime import datetime, timedelta, time
 from django.utils import timezone as django_tz
 
 
-def _tz_offset():
-    """Get UTC offset of Django TIME_ZONE setting as timedelta."""
-    now = django_tz.now()
-    local_now = now.astimezone(django_tz.get_current_timezone())
-    return local_now.utcoffset()
+_LOCAL_TZ = django_tz.get_current_timezone()
 
 
 def _start_of_day(dt):
-    """Start of day in local tz, shifted to UTC for DB comparison."""
+    """Start of day in local tz, returned as aware datetime."""
     if isinstance(dt, datetime):
         dt = dt.date()
-    return datetime.combine(dt, time.min) - _tz_offset()
+    naive = datetime.combine(dt, time.min)
+    return django_tz.make_aware(naive, _LOCAL_TZ)
 
 
 def _end_of_day(dt):
-    """End of day in local tz, shifted to UTC for DB comparison."""
+    """End of day in local tz, returned as aware datetime."""
     if isinstance(dt, datetime):
         dt = dt.date()
-    return datetime.combine(dt, time.max) - _tz_offset()
+    naive = datetime.combine(dt, time.max)
+    return django_tz.make_aware(naive, _LOCAL_TZ)
 
 
 class FilterService:
@@ -40,7 +38,7 @@ class FilterService:
         params = filter_set.filter_params
         queryset = Events2Post.objects.all()
 
-        today = datetime.today()
+        today = django_tz.localdate()
         week_ahead = today + timedelta(days=7)
 
         # Default date range (using full days to avoid timezone issues)
