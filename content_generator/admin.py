@@ -1,4 +1,6 @@
 from django.contrib import admin, messages
+from django.urls import reverse
+from django.utils.html import format_html
 from .models import FilterSet, EventSelection, PostTemplate, GeneratedPost, PostingSchedule
 from .services import FilterService
 from django.utils.translation import ngettext
@@ -100,6 +102,13 @@ class EventSelectionAdmin(admin.ModelAdmin):
     search_fields = ['name']
     filter_horizontal = ['selected_events']
     actions = [generate_post_action, 'generate_post_api']
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['wizard_url'] = reverse('content_generator_wizard')
+        return super().changelist_view(request, extra_context=extra_context)
+
+    change_list_template = "content_generator/eventselection_change_list.html"
 
     def save_model(self, request, obj, form, change):
         if not change:

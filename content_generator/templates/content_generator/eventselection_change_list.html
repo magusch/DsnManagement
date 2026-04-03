@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+    {{ block.super }}
+    <div style="margin-bottom: 8px;">
+        <a class="button" href="{{ wizard_url }}" style="background:#6f42c1;">
+            Генератор контента (Wizard)
+        </a>
+    </div>
+{% endblock %}

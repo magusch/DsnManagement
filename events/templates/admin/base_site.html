@@ -6,4 +6,10 @@
 <h1 id="site-name"><a href="{% url 'admin:index' %}">Давай с Нами – Админка</a></h1>
 {% endblock %}
 
-{% block nav-global %}{% endblock %}
+{% block nav-global %}
+<div style="background:#417690; padding:4px 20px; display:flex; gap:12px;">
+    <a href="{% url 'content_generator_wizard' %}" style="color:#fff; text-decoration:none; padding:4px 12px; background:#6f42c1; border-radius:4px; font-size:13px;">
+        Генератор контента
+    </a>
+</div>
+{% endblock %}

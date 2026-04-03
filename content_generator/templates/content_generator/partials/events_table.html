@@ -1,0 +1,52 @@
+{% if error %}
+    <p class="error-msg">{{ error }}</p>
+{% elif events %}
+    <div class="counter-bar">
+        <div>
+            Найдено: <span class="count">{{ total_count }}</span> мероприятий
+            &nbsp;|&nbsp;
+            Выбрано: <span class="count" id="selected-counter">{{ total_count }}</span>
+        </div>
+        <div class="select-tools">
+            <a onclick="selectAll()">Все</a>
+            <a onclick="selectNone()">Снять</a>
+            <a onclick="selectInvert()">Инверт.</a>
+        </div>
+    </div>
+    <div class="events-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="event-toggle-all" checked></th>
+                    <th>Название</th>
+                    <th>Дата</th>
+                    <th>Кат.</th>
+                    <th>Цена</th>
+                    <th>Score</th>
+                    <th>Адрес</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr>
+                    <td><input type="checkbox" class="event-cb" value="{{ event.id }}" data-date="{{ event.from_date|date:'Y-m-d' }}" data-image="{{ event.image|default:'' }}" checked></td>
+                    <td title="{{ event.title }}">
+                        <a href="/events/events2post/{{ event.id }}/change/" target="_blank" style="color:#417690; text-decoration:none;" title="Открыть в админке">{{ event.title|truncatechars:55 }}</a>
+                    </td>
+                    <td style="white-space:nowrap;">{{ event.from_date|date:"d.m" }}</td>
+                    <td>{{ event.main_category|default:"—" }}</td>
+                    <td style="white-space:nowrap;">{{ event.price|default:"—"|truncatechars:15 }}</td>
+                    <td style="text-align:center;">{{ event.score|default:"—" }}</td>
+                    <td title="{{ event.address }}">{{ event.address|truncatechars:30|default:"—" }}</td>
+                    <td>
+                        {% if event.url %}<a href="{{ event.url }}" target="_blank" rel="noopener" style="color:#999; font-size:12px;" title="{{ event.url }}">src</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <p style="color: #999;">Фильтр не вернул ни одного мероприятия.</p>
+{% endif %}

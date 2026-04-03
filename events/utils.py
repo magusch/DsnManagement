@@ -15,6 +15,25 @@ from .helper.post_helper import PostHelper
 CHANNEL_API_URL = os.environ.get("CHANNEL_API_URL")
 CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
 
+_FREE_KEYWORDS = ('бесплатно', 'free', 'вход свободный', 'свободный вход', 'бесплатный')
+
+
+def parse_price_int(price_text):
+    """Parse integer price from price text.
+
+    Returns:
+        int: price number (e.g. 300), 0 if free, or None if can't parse.
+    """
+    if not price_text:
+        return None
+    text = price_text.strip().lower()
+    if any(kw in text for kw in _FREE_KEYWORDS):
+        return 0
+    numbers = re.findall(r'\d+', text.replace(' ', ''))
+    if numbers:
+        return int(numbers[0])
+    return None
+
 current_tz = timezone.get_current_timezone()
 
 current_tz_int = timezone.now().astimezone(current_tz).hour - timezone.now().hour
@@ -307,6 +326,7 @@ def make_a_post_text(event, save=0):
         remake_event_data['post'] = remaked_event['post']
         remake_event_data['place'] = remaked_event['place_id']
         remake_event_data['main_category'] = remaked_event['main_category']
+        price_text = event.price
     elif type(event) == dict:
         post_helper = PostHelper(event)
         remake_event_data['post'] = post_helper.post_markdown()
@@ -314,7 +334,14 @@ def make_a_post_text(event, save=0):
         main_category = post_helper.main_category()
         if main_category is not None:
             remake_event_data['main_category'] = main_category
-    
+        price_text = event.get('price', '')
+    else:
+        price_text = ''
+
+    price_int = parse_price_int(price_text)
+    if price_int is not None:
+        remake_event_data['price_int'] = price_int
+
     return remake_event_data
 
 

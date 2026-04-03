@@ -1,0 +1,31 @@
+{% if error %}
+    <p class="error-msg">{{ error }}</p>
+{% elif content %}
+    <div style="margin-bottom: 10px;">
+        {% if method == "code" %}
+            <span class="info-badge success">Шаблон</span>
+        {% elif method == "ai" %}
+            <span class="info-badge info">ИИ</span>
+        {% endif %}
+        <span style="font-size:13px; color:#666; margin-left:8px;">
+            Использовано {{ used_count }} из {{ total_count }} мероприятий
+        </span>
+        {% if truncated %}
+            <span class="info-badge warning">обрезано по лимиту</span>
+        {% endif %}
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label for="post-title-input" style="font-weight:bold; font-size:13px;">Заголовок поста:</label>
+        <input type="text" id="post-title-input" style="width:100%; padding:6px 10px; border:1px solid #ccc; border-radius:4px;" placeholder="Подборка мероприятий">
+    </div>
+
+    <textarea id="post-content-edit">{{ content }}</textarea>
+    <input type="hidden" id="post-event-ids" value="{{ event_ids }}">
+
+    <div style="margin-top: 12px; display:flex; gap:10px;">
+        <button class="btn btn-save" onclick="savePost()">
+            Сохранить пост
+        </button>
+    </div>
+{% endif %}
