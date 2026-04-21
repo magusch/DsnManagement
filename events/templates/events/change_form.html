@@ -172,6 +172,20 @@
             return event
         }
 
+        function applyMakePostData(data) {
+            var fieldMap = {
+                'post':             'id_post',
+                'price_int':        'id_price_int',
+                'place_id':         'id_place',
+                'main_category_id': 'id_main_category',
+            };
+            for (var key in fieldMap) {
+                if (!data.hasOwnProperty(key) || data[key] === null) continue;
+                var el = document.getElementById(fieldMap[key]);
+                if (el) el.value = data[key];
+            }
+        }
+
         function setAiStatus(text, color) {
             var s = document.getElementById('ai-status');
             if (!s) return;
@@ -196,12 +210,97 @@
             }
         }
 
+        function remakePostAPIById() {
+            var event_id = '{{ original.id }}';
+
+            var data = {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                api_url: 'api/events/remake_post/' + event_id + '?save=false',
+                method: 'POST',
+                data: {},
+            };
+
+            setAiDetail(null);
+            setAiStatus('Отправляю запрос к API (by id)...', '#333');
+            var btn = document.getElementById('btn-remake-api-id');
+            if (btn) btn.classList.add('disabled');
+
+            $.ajax({
+                url: channel_api_url,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response['status'] === 'success') {
+                        var resultData = response['result'];
+                        console.log(resultData);
+                        applyResponseData(resultData);
+                        setAiStatus('Готово: пост обновлён (by id)', 'green');
+                        setAiDetail(resultData);
+                    } else {
+                        setAiStatus('Ошибка API, выполняю локально...', 'red');
+                        setAiDetail(response);
+                        remakePost();
+                    }
+                    if (btn) btn.classList.remove('disabled');
+                },
+                error: function(xhr, status, error) {
+                    setAiStatus('Сервер недоступен, выполняю локально...', '#b36b00');
+                    setAiDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
+                    if (btn) btn.classList.remove('disabled');
+                    remakePost();
+                }
+            });
+        }
+
+        function remakePostAPI() {
+            var event_data = getEventValues();
+
+            var data = {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                api_url: 'api/events/make_post/',
+                method: 'POST',
+                data: event_data,
+            };
+
+            setAiDetail(null);
+            setAiStatus('Отправляю запрос к API...', '#333');
+            var btn = document.getElementById('btn-remake-api');
+            if (btn) btn.classList.add('disabled');
+
+            $.ajax({
+                url: channel_api_url,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response['status'] === 'success') {
+                        var resultData = response['result'];
+                        applyMakePostData(resultData);
+                        setAiStatus('Готово: пост обновлён', 'green');
+                        setAiDetail(resultData);
+                    } else {
+                        setAiStatus('Ошибка API, выполняю локально...', 'red');
+                        setAiDetail(response);
+                        remakePost();
+                    }
+                    if (btn) btn.classList.remove('disabled');
+                },
+                error: function(xhr, status, error) {
+                    setAiStatus('Сервер недоступен, выполняю локально...', '#b36b00');
+                    setAiDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
+                    if (btn) btn.classList.remove('disabled');
+                    remakePost();
+                }
+            });
+        }
+
         function newRemakePostByAi() {
             let event_data = getEventValues()
 
             let data = {
                 csrfmiddlewaretoken: '{{ csrf_token }}',
-                api_url: 'api/ai_update_event/',
+                api_url: 'api/ai/update-event/',
                 method: 'POST',
                 data: {
                     'is_new': 0,
@@ -319,6 +418,8 @@
             {% submit_row %}
             <div style="margin-bottom: 10px; display: flex; gap: 10px;">
                 <a href="#" onclick="remakePost()" class="button"  alt="It uses value of title, full_text, date_from, price, url">Remake post</a>
+                <a href="#" id="btn-remake-api" onclick="remakePostAPI()" class="button" alt="Remake post via external API (from form data)">Remake post API</a>
+                <a href="#" id="btn-remake-api-id" onclick="remakePostAPIById()" class="button" alt="Remake post via external API (reads from DB by id)">Remake post API (by id)</a>
                 <a href="#" id="btn-new-ai" onclick="newRemakePostByAi()" class="button"  alt="It uses value of title, full_text, date_from, price, url">NEW Remake post by GPT</a>
                 <a href="#" onclick="hideFullText()" class="button" id="hide_full_text">Show full text</a>
                 <span id="ai-status" style="margin-left:8px;"></span>

@@ -188,7 +188,9 @@ def move_event_to_post(Events_model):
         ev = make_a_post_text(event_dict)
         event_dict['post'] = ev['post']
         event_dict['place_id'] = ev['place'] if ev['place'] is not None else (event.place.id if event.place is not None else None)
-        if 'main_category' in ev:
+        if 'main_category_id' in ev:
+            event_dict['main_category_id'] = ev['main_category_id']
+        elif 'main_category' in ev:
             event_dict['main_category'] = ev['main_category']
 
         Events2Post.objects.create(
@@ -322,18 +324,47 @@ def count_events_by_day(*kwargs):
 def make_a_post_text(event, save=0):
     remake_event_data = {}
     if type(event) == Events2Post:
-        remaked_event = event.remake_post(save=save)
-        remake_event_data['post'] = remaked_event['post']
-        remake_event_data['place'] = remaked_event['place_id']
-        remake_event_data['main_category'] = remaked_event['main_category']
+        response, error = channel_api_request({
+            "api_url": f"api/events/remake_post/{event.id}?save={'true' if save else 'false'}",
+            "method": "POST",
+            "data": {},
+        })
+        if not error:
+            result = response.json().get('result', {})
+            remake_event_data['post'] = result.get('post', '')
+            remake_event_data['place'] = result.get('place_id')
+            if result.get('main_category_id') is not None:
+                remake_event_data['main_category_id'] = result.get('main_category_id')
+        else:
+            remaked_event = event.remake_post(save=save)
+            remake_event_data['post'] = remaked_event['post']
+            remake_event_data['place'] = remaked_event['place_id']
+            remake_event_data['main_category'] = remaked_event['main_category']
         price_text = event.price
     elif type(event) == dict:
-        post_helper = PostHelper(event)
-        remake_event_data['post'] = post_helper.post_markdown()
-        remake_event_data['place'] = post_helper.place_id()
-        main_category = post_helper.main_category()
-        if main_category is not None:
-            remake_event_data['main_category'] = main_category
+        import datetime as _dt
+        serializable = {
+            k: v.isoformat() if isinstance(v, (_dt.datetime, _dt.date)) else v
+            for k, v in event.items()
+        }
+        response, error = channel_api_request({
+            "api_url": "api/events/make_post/",
+            "method": "POST",
+            "data": serializable,
+        })
+        if not error:
+            result = response.json().get('result', {})
+            remake_event_data['post'] = result.get('post', '')
+            remake_event_data['place'] = result.get('place_id')
+            if result.get('main_category_id') is not None:
+                remake_event_data['main_category_id'] = result.get('main_category_id')
+        else:
+            post_helper = PostHelper(event)
+            remake_event_data['post'] = post_helper.post_markdown()
+            remake_event_data['place'] = post_helper.place_id()
+            main_category = post_helper.main_category()
+            if main_category is not None:
+                remake_event_data['main_category'] = main_category
         price_text = event.get('price', '')
     else:
         price_text = ''
