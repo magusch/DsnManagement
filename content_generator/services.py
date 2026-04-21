@@ -36,7 +36,7 @@ class FilterService:
     def apply_filters(filter_set: FilterSet):
         """Apply filters and return filtered events queryset."""
         params = filter_set.filter_params
-        queryset = Events2Post.objects.all()
+        queryset = Events2Post.objects.filter(status__in=['Posted', 'ReadyToPost'])
 
         today = django_tz.localdate()
         week_ahead = today + timedelta(days=7)

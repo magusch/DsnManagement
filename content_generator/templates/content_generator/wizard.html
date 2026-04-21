@@ -95,8 +95,11 @@
         top: 0;
         z-index: 1;
     }
+    #events-container tbody tr { cursor: pointer; transition: background-color 0.1s; }
     #events-container tr:hover { background: #f5f9fc; }
     #events-container tr.unchecked { opacity: 0.4; }
+    #events-container tr.selected-row { background-color: #fffde7; }
+    #events-container tr.selected-row:hover { background-color: #fff9c4; }
 
     .events-wrapper {
         max-height: 500px;
@@ -352,7 +355,7 @@
     document.addEventListener('change', function(e) {
         if (e.target.classList.contains('event-cb')) {
             var row = e.target.closest('tr');
-            if (row) row.classList.toggle('unchecked', !e.target.checked);
+            if (row) { row.classList.toggle('unchecked', !e.target.checked); row.classList.toggle('selected-row', e.target.checked); }
             updateCounter();
         }
         if (e.target.id === 'event-toggle-all') {
@@ -360,7 +363,7 @@
             cbs.forEach(function(cb) {
                 cb.checked = e.target.checked;
                 var row = cb.closest('tr');
-                if (row) row.classList.toggle('unchecked', !cb.checked);
+                if (row) { row.classList.toggle('unchecked', !cb.checked); row.classList.toggle('selected-row', cb.checked); }
             });
             updateCounter();
         }
@@ -370,7 +373,7 @@
     window.selectAll = function() {
         document.querySelectorAll('#events-container input.event-cb').forEach(function(cb) {
             cb.checked = true;
-            var row = cb.closest('tr'); if (row) row.classList.remove('unchecked');
+            var row = cb.closest('tr'); if (row) { row.classList.remove('unchecked'); row.classList.add('selected-row'); }
         });
         var toggle = document.getElementById('event-toggle-all');
         if (toggle) toggle.checked = true;
@@ -379,7 +382,7 @@
     window.selectNone = function() {
         document.querySelectorAll('#events-container input.event-cb').forEach(function(cb) {
             cb.checked = false;
-            var row = cb.closest('tr'); if (row) row.classList.add('unchecked');
+            var row = cb.closest('tr'); if (row) { row.classList.add('unchecked'); row.classList.remove('selected-row'); }
         });
         var toggle = document.getElementById('event-toggle-all');
         if (toggle) toggle.checked = false;
@@ -388,15 +391,72 @@
     window.selectInvert = function() {
         document.querySelectorAll('#events-container input.event-cb').forEach(function(cb) {
             cb.checked = !cb.checked;
-            var row = cb.closest('tr'); if (row) row.classList.toggle('unchecked', !cb.checked);
+            var row = cb.closest('tr'); if (row) { row.classList.toggle('unchecked', !cb.checked); row.classList.toggle('selected-row', cb.checked); }
         });
         updateCounter();
     };
 
-    // After HTMX swaps in the events table, re-init counter
+    function initTableInteractions() {
+        var checkboxes = Array.from(document.querySelectorAll('#events-container input.event-cb'));
+        var lastChecked = null;
+
+        // Mark initially checked rows
+        checkboxes.forEach(function(cb) {
+            var row = cb.closest('tr');
+            if (row && cb.checked) row.classList.add('selected-row');
+        });
+
+        // Row click toggles selection
+        document.querySelectorAll('#events-container tbody tr').forEach(function(row) {
+            row.addEventListener('click', function(e) {
+                if (e.target.closest('a, input, button, select, textarea')) return;
+                var cb = row.querySelector('input.event-cb');
+                if (!cb) return;
+                if (e.shiftKey && lastChecked) {
+                    var all = Array.from(document.querySelectorAll('#events-container input.event-cb'));
+                    var start = all.indexOf(cb);
+                    var end = all.indexOf(lastChecked);
+                    var lo = Math.min(start, end), hi = Math.max(start, end);
+                    for (var i = lo; i <= hi; i++) {
+                        all[i].checked = lastChecked.checked;
+                        var r = all[i].closest('tr');
+                        if (r) { r.classList.toggle('unchecked', !all[i].checked); r.classList.toggle('selected-row', all[i].checked); }
+                    }
+                } else {
+                    cb.checked = !cb.checked;
+                    row.classList.toggle('unchecked', !cb.checked);
+                    row.classList.toggle('selected-row', cb.checked);
+                }
+                lastChecked = cb;
+                updateCounter();
+            });
+        });
+
+        // Shift+click on checkboxes for range selection
+        checkboxes.forEach(function(cb) {
+            cb.addEventListener('click', function(e) {
+                if (e.shiftKey && lastChecked && lastChecked !== cb) {
+                    var all = Array.from(document.querySelectorAll('#events-container input.event-cb'));
+                    var start = all.indexOf(cb);
+                    var end = all.indexOf(lastChecked);
+                    var lo = Math.min(start, end), hi = Math.max(start, end);
+                    for (var i = lo; i <= hi; i++) {
+                        all[i].checked = lastChecked.checked;
+                        var row = all[i].closest('tr');
+                        if (row) { row.classList.toggle('unchecked', !all[i].checked); row.classList.toggle('selected-row', all[i].checked); }
+                    }
+                    updateCounter();
+                }
+                lastChecked = cb;
+            });
+        });
+    }
+
+    // After HTMX swaps in the events table, re-init counter and interactions
     document.addEventListener('htmx:afterSwap', function(e) {
         if (e.detail.target.id === 'events-container') {
             updateCounter();
+            initTableInteractions();
         }
     });
 
