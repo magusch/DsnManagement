@@ -126,7 +126,7 @@
 
         function remakePostByAi() {
             let event_data = getEventValues()
-            setAiStatus('Посылание запроса локально..', 'red');
+            setAPIStatus('Посылание запроса локально..', 'red');
             let data = {
                 csrfmiddlewaretoken: '{{ csrf_token }}',
                 id: '{{ original.id }}',
@@ -139,13 +139,13 @@
                 dataType: 'json',
                 data,
                 success: function(response) {
-                    setAiStatus('Результат успешно получен. Обновление данных.', 'green');
+                    setAPIStatus('Результат успешно получен. Обновление данных.', 'green');
                     applyResponseData(response[0]);
-                    setAiStatus('Данные обновлены.', 'green');
+                    setAPIStatus('Данные обновлены.', 'green');
                 },
                 error: function(xhr, status, error) {
                     console.error(error);
-                    setAiStatus('Ошибка.', 'red');
+                    setAPIStatus('Ошибка.', 'red');
                 }
             });
         }
@@ -186,16 +186,16 @@
             }
         }
 
-        function setAiStatus(text, color) {
-            var s = document.getElementById('ai-status');
+        function setAPIStatus(text, color) {
+            var s = document.getElementById('api-status');
             if (!s) return;
             s.textContent = text || '';
             if (color) s.style.color = color; else s.style.color = '';
         }
 
-        function setAiDetail(obj) {
-            var wrap = document.getElementById('ai-status-detail-wrap');
-            var pre = document.getElementById('ai-status-detail');
+        function setAPIDetail(obj) {
+            var wrap = document.getElementById('api-status-detail-wrap');
+            var pre = document.getElementById('api-status-detail');
             if (!wrap || !pre) return;
             if (!obj) {
                 wrap.style.display = 'none';
@@ -210,48 +210,6 @@
             }
         }
 
-        function remakePostAPIById() {
-            var event_id = '{{ original.id }}';
-
-            var data = {
-                csrfmiddlewaretoken: '{{ csrf_token }}',
-                api_url: 'api/events/remake_post/' + event_id + '?save=false',
-                method: 'POST',
-                data: {},
-            };
-
-            setAiDetail(null);
-            setAiStatus('Отправляю запрос к API (by id)...', '#333');
-            var btn = document.getElementById('btn-remake-api-id');
-            if (btn) btn.classList.add('disabled');
-
-            $.ajax({
-                url: channel_api_url,
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                success: function(response) {
-                    if (response['status'] === 'success') {
-                        var resultData = response['result'];
-                        console.log(resultData);
-                        applyResponseData(resultData);
-                        setAiStatus('Готово: пост обновлён (by id)', 'green');
-                        setAiDetail(resultData);
-                    } else {
-                        setAiStatus('Ошибка API, выполняю локально...', 'red');
-                        setAiDetail(response);
-                        remakePost();
-                    }
-                    if (btn) btn.classList.remove('disabled');
-                },
-                error: function(xhr, status, error) {
-                    setAiStatus('Сервер недоступен, выполняю локально...', '#b36b00');
-                    setAiDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
-                    if (btn) btn.classList.remove('disabled');
-                    remakePost();
-                }
-            });
-        }
 
         function remakePostAPI() {
             var event_data = getEventValues();
@@ -263,8 +221,8 @@
                 data: event_data,
             };
 
-            setAiDetail(null);
-            setAiStatus('Отправляю запрос к API...', '#333');
+            setAPIDetail(null);
+            setAPIStatus('Отправляю запрос к API...', '#333');
             var btn = document.getElementById('btn-remake-api');
             if (btn) btn.classList.add('disabled');
 
@@ -277,25 +235,25 @@
                     if (response['status'] === 'success') {
                         var resultData = response['result'];
                         applyMakePostData(resultData);
-                        setAiStatus('Готово: пост обновлён', 'green');
-                        setAiDetail(resultData);
+                        setAPIStatus('Готово: пост обновлён', 'green');
+                        setAPIDetail(resultData);
                     } else {
-                        setAiStatus('Ошибка API, выполняю локально...', 'red');
-                        setAiDetail(response);
+                        setAPIStatus('Ошибка API, выполняю локально...', 'red');
+                        setAPIDetail(response);
                         remakePost();
                     }
                     if (btn) btn.classList.remove('disabled');
                 },
                 error: function(xhr, status, error) {
-                    setAiStatus('Сервер недоступен, выполняю локально...', '#b36b00');
-                    setAiDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
+                    setAPIStatus('Сервер недоступен, выполняю локально...', '#b36b00');
+                    setAPIDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
                     if (btn) btn.classList.remove('disabled');
                     remakePost();
                 }
             });
         }
 
-        function newRemakePostByAi() {
+        function remakePostByAi() {
             let event_data = getEventValues()
 
             let data = {
@@ -308,8 +266,8 @@
                 },
             };
 
-            setAiDetail(null);
-            setAiStatus('Отправляю запрос...', '#333');
+            setAPIDetail(null);
+            setAPIStatus('Отправляю запрос...', '#333');
             var btn = document.getElementById('btn-new-ai');
             if (btn) btn.classList.add('disabled');
 
@@ -319,7 +277,7 @@
                     contentType: 'application/json',
                     data: JSON.stringify(data),
                     success: function(response) {
-                        setAiStatus('Запрос принят. Обработка...', '#333');
+                        setAPIStatus('Запрос принят. Обработка...', '#333');
                         let taskId = response['task_id']
                         let rest_interval = 50000;
                         let interval_sec = 5000;
@@ -330,13 +288,13 @@
                                 if(result['status']==='success') {
                                     let data = result['result'];
                                     applyResponseData(data);
-                                    setAiStatus('Готово: обновлено успешно', 'green');
-                                    setAiDetail(data);
+                                    setAPIStatus('Готово: обновлено успешно', 'green');
+                                    setAPIDetail(data);
                                     clearInterval(interval);
                                     if (btn) btn.classList.remove('disabled');
                                 } else if (result['status']==='error') {
-                                    setAiStatus('Ошибка при обработке, выполняю локально...', 'red');
-                                    setAiDetail(result['message'] || result);
+                                    setAPIStatus('Ошибка при обработке, выполняю локально...', 'red');
+                                    setAPIDetail(result['message'] || result);
                                     clearInterval(interval);
                                     if (btn) btn.classList.remove('disabled');
                                     remakePostByAi();
@@ -344,7 +302,7 @@
                             }
                             rest_interval = rest_interval - interval_sec
                             if(rest_interval<= 0) {
-                                setAiStatus('Превышено время ожидания ответа от сервера, выполняю локально...', 'red');
+                                setAPIStatus('Превышено время ожидания ответа от сервера, выполняю локально...', 'red');
                                 clearInterval(interval);
                                 if (btn) btn.classList.remove('disabled');
                                 remakePostByAi();
@@ -352,8 +310,8 @@
                         }, interval_sec);
                     },
                     error: function(xhr, status, error) {
-                        setAiStatus('Сервер ChannelBot недоступен, выполняю локально...', '#b36b00');
-                        setAiDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
+                        setAPIStatus('Сервер ChannelBot недоступен, выполняю локально...', '#b36b00');
+                        setAPIDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
                         remakePostByAi();
                         if (btn) btn.classList.remove('disabled');
                     }
@@ -417,12 +375,10 @@
         {% block submit_buttons_top %}
             {% submit_row %}
             <div style="margin-bottom: 10px; display: flex; gap: 10px;">
-                <a href="#" onclick="remakePost()" class="button"  alt="It uses value of title, full_text, date_from, price, url">Remake post</a>
                 <a href="#" id="btn-remake-api" onclick="remakePostAPI()" class="button" alt="Remake post via external API (from form data)">Remake post API</a>
-                <a href="#" id="btn-remake-api-id" onclick="remakePostAPIById()" class="button" alt="Remake post via external API (reads from DB by id)">Remake post API (by id)</a>
-                <a href="#" id="btn-new-ai" onclick="newRemakePostByAi()" class="button"  alt="It uses value of title, full_text, date_from, price, url">NEW Remake post by GPT</a>
+                <a href="#" id="btn-new-ai" onclick="remakePostByAi()" class="button"  alt="It uses value of title, full_text, date_from, price, url">NEW Remake post by GPT</a>
                 <a href="#" onclick="hideFullText()" class="button" id="hide_full_text">Show full text</a>
-                <span id="ai-status" style="margin-left:8px;"></span>
+                <span id="api-status" style="margin-left:8px;"></span>
             </div>
         {% endblock %}
     {% endif %}
@@ -481,8 +437,8 @@
 {% prepopulated_fields_js %}
 
 </div>
-<div id="ai-status-detail-wrap" style="margin: 8px 0 0 0; display: none;">
-    <pre id="ai-status-detail" style="max-height: 260px; overflow:auto; background:#f6f6f6; padding:8px; border:1px solid #ddd;"></pre>
+<div id="api-status-detail-wrap" style="margin: 8px 0 0 0; display: none;">
+    <pre id="api-status-detail" style="max-height: 260px; overflow:auto; background:#f6f6f6; padding:8px; border:1px solid #ddd;"></pre>
 </div>
 </form></div>
     <script>
