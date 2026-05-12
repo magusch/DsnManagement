@@ -52,7 +52,7 @@
         function parsePriceInt(priceText) {
             if (!priceText) return null;
             var text = priceText.trim().toLowerCase();
-            if (['бесплатно', 'free', 'вход свободный', 'свободный вход'].some(function(kw) { return text.indexOf(kw) !== -1; })) return 0;
+            if (['бесплатно', 'free', 'вход свободный', 'свободный вход', 'свободный'].some(function(kw) { return text.indexOf(kw) !== -1; })) return 0;
             var nums = text.replace(/\s/g, '').match(/\d+/);
             return nums ? parseInt(nums[0], 10) : null;
         }
@@ -237,6 +237,10 @@
                         applyMakePostData(resultData);
                         setAPIStatus('Готово: пост обновлён', 'green');
                         setAPIDetail(resultData);
+                        let isReadyCheckbox = document.querySelector('input[name="is_ready"]');
+                        if (isReadyCheckbox) {
+                            isReadyCheckbox.checked = true;
+                        };
                     } else {
                         setAPIStatus('Ошибка API, выполняю локально...', 'red');
                         setAPIDetail(response);
