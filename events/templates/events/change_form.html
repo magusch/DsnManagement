@@ -124,7 +124,7 @@
             });
         }
 
-        function remakePostByAi() {
+        function remakePostByAiLocal() {
             let event_data = getEventValues()
             setAPIStatus('Посылание запроса локально..', 'red');
             let data = {
@@ -301,7 +301,8 @@
                                     setAPIDetail(result['message'] || result);
                                     clearInterval(interval);
                                     if (btn) btn.classList.remove('disabled');
-                                    remakePostByAi();
+                                    await cancelTask(taskId);
+                                    remakePostByAiLocal();
                                 }
                             }
                             rest_interval = rest_interval - interval_sec
@@ -309,18 +310,37 @@
                                 setAPIStatus('Превышено время ожидания ответа от сервера, выполняю локально...', 'red');
                                 clearInterval(interval);
                                 if (btn) btn.classList.remove('disabled');
-                                remakePostByAi();
+                                await cancelTask(taskId);
+                                remakePostByAiLocal();
                             }
                         }, interval_sec);
                     },
                     error: function(xhr, status, error) {
                         setAPIStatus('Сервер ChannelBot недоступен, выполняю локально...', '#b36b00');
                         setAPIDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
-                        remakePostByAi();
+                        remakePostByAiLocal();
                         if (btn) btn.classList.remove('disabled');
                     }
                 });
 
+        }
+
+        async function cancelTask(taskId) {
+            if (!taskId) return;
+            try {
+                await $.ajax({
+                    url: channel_api_url,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                        api_url: 'api/tasks/' + taskId + '/',
+                        method: 'DELETE',
+                    }),
+                });
+            } catch (e) {
+                console.warn('cancel task failed', e);
+            }
         }
 
         async function taskStatus(taskId) {

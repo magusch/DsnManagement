@@ -255,8 +255,8 @@ class Events2Post(models.Model):  # Table events for posting
     ticket_url = models.CharField(max_length=500, blank=True, null=True)
     status = models.CharField(
         max_length=15,
-        choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"), ("ForFuture", "For Future"),
-                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected"), ("Expired", "Expired")),
+        choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"), ("ForFuture", "For Future"), ("OnlyApi", "OnlyApi"),
+                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected"), ("Expired", "Expired"),),
         default="ReadyToPost",
         db_index=True
     )
