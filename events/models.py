@@ -1,10 +1,13 @@
 import re
 
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.html import format_html
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+
+from pgvector.django import VectorField, HnswIndex
 
 import random
 
@@ -104,6 +107,21 @@ class EventsNotApprovedNew(models.Model):
     )
     score = models.IntegerField(verbose_name='total event score', null=True, blank=True)
     score_breakdown = models.JSONField(verbose_name='event score by categories',null=True, blank=True)
+    embedding = VectorField(dimensions=1536, null=True, blank=True)
+    embedding_model = models.CharField(max_length=64, null=True, blank=True)
+    embedding_updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name="enapproved_new_emb_hnsw",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+                condition=Q(embedding__isnull=False),
+            ),
+        ]
 
     def __str__(self):
         return self.title
@@ -172,6 +190,21 @@ class EventsNotApprovedProposed(models.Model):
     )
     score = models.IntegerField(verbose_name='total event score', null=True, blank=True)
     score_breakdown = models.JSONField(verbose_name='event score by categories', null=True, blank=True)
+    embedding = VectorField(dimensions=1536, null=True, blank=True)
+    embedding_model = models.CharField(max_length=64, null=True, blank=True)
+    embedding_updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name="enapproved_prop_emb_hnsw",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+                condition=Q(embedding__isnull=False),
+            ),
+        ]
 
     def __str__(self):
         return self.title
@@ -223,7 +256,7 @@ class Events2Post(models.Model):  # Table events for posting
     status = models.CharField(
         max_length=15,
         choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"), ("ForFuture", "For Future"),
-                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected")),
+                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected"), ("Expired", "Expired")),
         default="ReadyToPost",
         db_index=True
     )
@@ -254,6 +287,21 @@ class Events2Post(models.Model):  # Table events for posting
     post_url = models.CharField(max_length=500, blank=True, null=True)
     score = models.IntegerField(verbose_name='total event score', null=True, blank=True)
     score_breakdown = models.JSONField(verbose_name='event score by categories', null=True, blank=True)
+    embedding = VectorField(dimensions=1536, null=True, blank=True)
+    embedding_model = models.CharField(max_length=64, null=True, blank=True)
+    embedding_updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name="events2post_emb_hnsw",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+                condition=Q(embedding__isnull=False),
+            ),
+        ]
 
     def __str__(self):
         return self.title
