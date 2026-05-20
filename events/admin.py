@@ -251,7 +251,7 @@ class Events2PostAdmin(admin.ModelAdmin):
         "change_queue",
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
-        "change_status_to_Posted",
+        "change_status_to_OnlyApi",
         'transfer_events_to_site',
         utils.post_date_order_by_queue,
         'text_post_check',
@@ -364,13 +364,13 @@ class Events2PostAdmin(admin.ModelAdmin):
             messages.SUCCESS,
         )
 
-    def change_status_to_Posted(self, request, queryset):
-        updated = queryset.update(status="Posted")
+    def change_status_to_OnlyApi(self, request, queryset):
+        updated = queryset.update(status="OnlyApi")
         self.message_user(
             request,
             ngettext(
-                "%d event was changed on Posted.",
-                "%d events were changed on Posted.",
+                "%d event was changed on OnlyApi.",
+                "%d events were changed on OnlyApi.",
                 updated,
             )
             % updated,

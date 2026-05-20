@@ -230,7 +230,7 @@ class EventsNotApprovedProposed(models.Model):
 
 
 status_color = {"ReadyToPost": "green", "Posted": "red", "ForFuture": 'blue', "Spam": "red", "Scrape": "purple",
-                "Error": "orange", "Rejected": "red"}
+                "Error": "orange", "Rejected": "red", "Expired": "gray", "OnlyApi": "purple"}
 
 
 def last_queue():
