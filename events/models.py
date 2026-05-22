@@ -307,7 +307,7 @@ class Events2Post(models.Model):  # Table events for posting
         return self.title
 
     def save(self, *args, **kwargs):
-        if self.category is not None and (self.main_category is None or self.main_category.id==2):
+        if self.category is not None and (not self.main_category_id or self.main_category_id == 2):
             subcategory, created = SubCategory.objects.get_or_create(name=self.category)
             self.main_category = subcategory.category
         if self.image_upload and self.image != self.image_upload.url:

@@ -157,6 +157,12 @@ def last_post_date():
     return post_time, 1
 
 
+def _serialize_for_api(value):
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return value.isoformat()
+    return value
+
+
 # Move Events form not approved table to table with approved Events2Post
 def move_event_to_post(Events_model):
     event2post_list = [

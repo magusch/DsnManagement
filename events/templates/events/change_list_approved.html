@@ -97,12 +97,28 @@
 {% endblock %}
 
 {% block object-tools %}
-    <div>
+    <div class="dsn-toolbar">
         <a class="button" href="{% url 'fill_empty_post_time' %}">Fill posting time</a>
 {#        <a class="button" href="{% url 'count_events_by_day' %}">Count events by day</a>#}
-        <a class="button" href="{{ show_all_url }}" >  All Events</a>
+        <a class="button" href="{{ show_all_url }}">All Events ({{ date_counts.all }})</a>
+        <a class="button" href="{{ show_upcoming_url }}">Будущие ({{ date_counts.upcoming }})</a>
+        <a class="button" href="{{ show_past_url }}">Прошедшие ({{ date_counts.past }})</a>
         <a class="button" href="{% url 'transfer_posted_events_to_site' %}">Transfer events to site</a>
     </div>
+    {% if status_summary %}
+        <div class="dsn-status-summary">
+            <span class="dsn-status-summary-label">Всего:</span>
+            {% for key, count, color in status_summary %}
+                <span class="dsn-status-chip" style="color: {{ color }};">{{ key }} <b>{{ count }}</b></span>{% if not forloop.last %} · {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
+    <style>
+        .dsn-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+        .dsn-status-summary { margin: 6px 0 4px; font-size: 12px; color: #555; }
+        .dsn-status-summary-label { color: #888; margin-right: 4px; }
+        .dsn-status-chip { white-space: nowrap; }
+    </style>
     <br/>
     {{ block.super }}
 {% endblock %}

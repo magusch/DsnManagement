@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.db.models import Q, Case, When, Value, IntegerField
 
 
-from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event, Status
+from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event, Status, status_color
 
 
 from . import utils
@@ -122,16 +122,6 @@ class EventsAdmin(admin.ModelAdmin):
     def approve_event(self, request, queryset):
         updated = queryset.update(approved=True)
         self._change_status(request, queryset, Status.APPROVED)
-        self.message_user(
-            request,
-            ngettext(
-                "%d event was successfully approved.",
-                "%d events were successfully approved.",
-                updated,
-            )
-            % updated,
-            messages.SUCCESS,
-        )
         utils.move_event_to_post(self.model)
 
     def from_date_order(self, obj):
@@ -282,39 +272,75 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     form = Events2PostAdminForm
 
+    DEFAULT_HIDDEN_STATUSES = ['Posted', 'Spam', 'OnlyApi', 'Expired']
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         if 'object_id' in request.resolver_match.kwargs:
             return queryset
+        show = getattr(request, '_dsn_show', None)
+        if show == 'upcoming':
+            return queryset.filter(to_date__gte=timezone.now())
+        if show == 'past':
+            return queryset.filter(to_date__lt=timezone.now())
         if request.GET.get('all') == 'true':
-            return queryset  # Show all events
-        return queryset.exclude(status__in=['Posted', 'Spam'])
+            return queryset
+        return queryset.exclude(status__in=self.DEFAULT_HIDDEN_STATUSES)
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['show_all_url'] = self.get_show_all_url(request)
-        extra_context['filter_ready_to_post_url'] = self.get_filter_ready_to_post_url(request)
+        extra_context['show_all_url'] = self._build_url(request, {'all': 'true'}, drop=['show'])
+        extra_context['filter_ready_to_post_url'] = self._build_url(request, {'status__exact': 'ReadyToPost'})
+        extra_context['show_upcoming_url'] = self._build_url(request, {'show': 'upcoming'}, drop=['all'])
+        extra_context['show_past_url'] = self._build_url(request, {'show': 'past'}, drop=['all'])
+        extra_context['status_summary'] = self._get_status_summary()
+        extra_context['date_counts'] = self._get_date_counts()
+
+        # 'show' isn't in Django admin's IGNORED_PARAMS, so it would be parsed
+        # as a field-lookup filter and trigger IncorrectLookupParameters.
+        # Stash it on the request and strip from GET before delegating.
+        show = request.GET.get('show')
+        if show in ('upcoming', 'past'):
+            request._dsn_show = show
+            mutable_get = request.GET.copy()
+            mutable_get.pop('show', None)
+            request.GET = mutable_get
         return super().changelist_view(request, extra_context=extra_context)
 
-    def get_show_all_url(self, request):
+    def _build_url(self, request, params, drop=None):
         from django.urls import reverse
 
         opts = self.model._meta
         base_url = reverse(f'admin:{opts.app_label}_{opts.model_name}_changelist')
         query_params = request.GET.copy()
-        query_params['all'] = 'true'
+        for key in (drop or []):
+            query_params.pop(key, None)
+        for key, value in params.items():
+            query_params[key] = value
         query_string = urlencode(query_params, doseq=True)
-        return f'{base_url}?{query_string}'
+        return f'{base_url}?{query_string}' if query_string else base_url
 
-    def get_filter_ready_to_post_url(self, request):
-        from django.urls import reverse
+    def _get_status_summary(self):
+        from django.db.models import Count
 
-        opts = self.model._meta
-        base_url = reverse(f'admin:{opts.app_label}_{opts.model_name}_changelist')
-        query_params = request.GET.copy()
-        query_params['status__exact'] = 'ReadyToPost'
-        query_string = urlencode(query_params, doseq=True)
-        return f'{base_url}?{query_string}'
+        rows = (Events2Post.objects
+                .values('status')
+                .annotate(n=Count('id'))
+                .order_by())
+        counts = {row['status']: row['n'] for row in rows}
+        ordered_keys = ['ReadyToPost', 'ForFuture', 'Scrape', 'Error', 'Rejected',
+                        'OnlyApi', 'Posted', 'Spam', 'Expired']
+        return [(key, counts.get(key, 0), status_color.get(key, 'gray'))
+                for key in ordered_keys if counts.get(key, 0) > 0]
+
+    def _get_date_counts(self):
+        now = timezone.now()
+        qs = Events2Post.objects.all()
+        return {
+            'upcoming': qs.filter(to_date__gte=now).count(),
+            'past': qs.filter(to_date__lt=now).count(),
+            'all': qs.count(),
+        }
 
     def markdown_post_view(self, instance):
         return instance.markdown_post_view_model()
@@ -330,9 +356,11 @@ class Events2PostAdmin(admin.ModelAdmin):
             When(status='ReadyToPost', then=Value(2)),
             When(status='Scrape', then=Value(3)),
             When(status='ForFuture', then=Value(4)),
-            When(status='Spam', then=Value(5)),
+            When(status='OnlyApi', then=Value(5)),
             When(status='Rejected', then=Value(6)),
-            default=Value(7),
+            When(status='Expired', then=Value(7)),
+            When(status='Spam', then=Value(8)),
+            default=Value(9),
             output_field=IntegerField(),
         )
         return [status_order, "queue"]
