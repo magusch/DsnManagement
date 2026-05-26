@@ -1,9 +1,20 @@
 from django.contrib import admin, messages
+from django.contrib.admin.views.main import ChangeList
 from django.utils.translation import ngettext
 from django.utils.html import format_html
 from django.utils.http import urlencode
 from django.utils import timezone
 from django.db.models import Q, Case, When, Value, IntegerField
+
+
+class Events2PostChangeList(ChangeList):
+    """Treat the custom 'show' query param as a non-filter param so it
+    survives pagination links but doesn't trigger IncorrectLookupParameters."""
+
+    def get_filters_params(self, params=None):
+        lookup_params = super().get_filters_params(params)
+        lookup_params.pop('show', None)
+        return lookup_params
 
 
 from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event, Status, status_color
@@ -274,11 +285,14 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     DEFAULT_HIDDEN_STATUSES = ['Posted', 'Spam', 'OnlyApi', 'Expired']
 
+    def get_changelist(self, request, **kwargs):
+        return Events2PostChangeList
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         if 'object_id' in request.resolver_match.kwargs:
             return queryset
-        show = getattr(request, '_dsn_show', None)
+        show = request.GET.get('show')
         if show == 'upcoming':
             return queryset.filter(to_date__gte=timezone.now())
         if show == 'past':
@@ -295,16 +309,6 @@ class Events2PostAdmin(admin.ModelAdmin):
         extra_context['show_past_url'] = self._build_url(request, {'show': 'past'}, drop=['all'])
         extra_context['status_summary'] = self._get_status_summary()
         extra_context['date_counts'] = self._get_date_counts()
-
-        # 'show' isn't in Django admin's IGNORED_PARAMS, so it would be parsed
-        # as a field-lookup filter and trigger IncorrectLookupParameters.
-        # Stash it on the request and strip from GET before delegating.
-        show = request.GET.get('show')
-        if show in ('upcoming', 'past'):
-            request._dsn_show = show
-            mutable_get = request.GET.copy()
-            mutable_get.pop('show', None)
-            request.GET = mutable_get
         return super().changelist_view(request, extra_context=extra_context)
 
     def _build_url(self, request, params, drop=None):
