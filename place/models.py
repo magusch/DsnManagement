@@ -14,6 +14,10 @@ class Place(models.Model):
     image_upload = models.ImageField(upload_to='place_images/', blank=True, null=True)
     place_metro = models.CharField(max_length=500, blank=True,)
     place_city = models.CharField(max_length=500, default='SPb', blank=True,)
+    category = models.CharField(
+        max_length=500, blank=True,
+        help_text="Категория, которая присваивается всем мероприятиям этой площадки",
+    )
 
     def markdown_address(self, with_url=True):
         name = escape_v2(self.place_name)

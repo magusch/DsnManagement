@@ -307,7 +307,18 @@ class Events2Post(models.Model):  # Table events for posting
         return self.title
 
     def save(self, *args, **kwargs):
-        if self.category is not None and (not self.main_category_id or self.main_category_id == 2):
+        place_overrode = False
+        if self.place_id:
+            place_category = Place.objects.filter(
+                id=self.place_id
+            ).values_list('category', flat=True).first()
+            if place_category:
+                self.category = place_category
+                place_overrode = True
+
+        if self.category is not None and (
+            place_overrode or not self.main_category_id or self.main_category_id == 2
+        ):
             subcategory, created = SubCategory.objects.get_or_create(name=self.category)
             self.main_category = subcategory.category
         if self.image_upload and self.image != self.image_upload.url:

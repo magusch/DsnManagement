@@ -21,8 +21,9 @@ class PlaceScheduleInline(admin.TabularInline):
 
 
 class PlaceAdmin(admin.ModelAdmin):
-    list_display = [str, 'place_name', 'place_url', 'url_to_address']
-    search_fields = ["place_name", "place_address", "place_metro"]
+    list_display = [str, 'place_name', 'category', 'place_url', 'url_to_address']
+    list_editable = ['category']
+    search_fields = ["place_name", "place_address", "place_metro", "category"]
     inlines = [PlaceScheduleInline]
     readonly_fields = ("get_schedule_str",)
 
