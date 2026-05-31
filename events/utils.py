@@ -183,13 +183,51 @@ def move_event_to_post(Events_model):
         "source"
     ]
 
-    events = Events_model.objects.filter(approved=True)
+    events_list = list(Events_model.objects.filter(approved=True))
+    if not events_list:
+        return
+
+    payload_events = []
+    for event in events_list:
+        event_dict = model_to_dict(event, fields=event2post_list)
+        event_dict['prepared_text'] = event_dict.get('post', '')
+        if event.place is not None:
+            event_dict['place_id'] = event.place.id
+        payload_events.append({k: _serialize_for_api(v) for k, v in event_dict.items()})
+
+    response, error = channel_api_request({
+        "api_url": "api/events/bulk_create_post/",
+        "method": "POST",
+        "data": {"events": payload_events, "save": True},
+    })
+
+    failed_events = []
+    if not error:
+        try:
+            api_results = response.json().get('result', [])
+        except Exception:
+            api_results = []
+
+        saved_ids = []
+        for i, event in enumerate(events_list):
+            result = api_results[i] if i < len(api_results) else None
+            if result and result.get('saved'):
+                saved_ids.append(event.id)
+            else:
+                failed_events.append(event)
+
+        if saved_ids:
+            Events_model.objects.filter(id__in=saved_ids).delete()
+
+        if not failed_events:
+            return
+    else:
+        failed_events = events_list
 
     post_date, queue = last_post_date()
 
-    for event in events:
+    for event in failed_events:
         event_dict = model_to_dict(event, fields=event2post_list)
-        # make post in transfering
         event_dict['prepared_text'] = event_dict['post']
         ev = make_a_post_text(event_dict)
         event_dict['post'] = ev['post']
@@ -204,7 +242,7 @@ def move_event_to_post(Events_model):
         )
         post_date, queue = last_post_date()
 
-    events.delete()
+    Events_model.objects.filter(id__in=[e.id for e in failed_events]).delete()
 
 
 def move_event_to_site(events_model):

@@ -500,10 +500,37 @@ class Events2PostAdmin(admin.ModelAdmin):
     change_queue.short_description = "Change event place"
 
     def update_post_text_for_posting(self, request, queryset):
-        events = queryset.all()
+        api_ok = 0
+        fallback_ok = 0
+        errors = []
 
-        for event in events:
-            event.remake_post(save=True)
+        for event in queryset:
+            response, error = utils.channel_api_request({
+                "api_url": f"api/events/remake_post/{event.id}?save=true",
+                "method": "POST",
+                "data": {},
+            })
+            if not error:
+                api_ok += 1
+            else:
+                try:
+                    event.remake_post(save=True)
+                    fallback_ok += 1
+                except Exception as e:
+                    errors.append(f"{event.id}: {e}")
+
+        parts = []
+        if api_ok:
+            parts.append(f"{api_ok} через API")
+        if fallback_ok:
+            parts.append(f"{fallback_ok} локально")
+        if errors:
+            parts.append(f"ошибки: {'; '.join(errors)}")
+
+        self.message_user(request, "Посты обновлены: " + ", ".join(parts),
+                          messages.WARNING if errors else messages.SUCCESS)
+
+    update_post_text_for_posting.short_description = "Обновить текст поста"
 
 
     def transfer_events_to_site(self, request, queryset):
