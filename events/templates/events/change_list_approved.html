@@ -113,11 +113,26 @@
             {% endfor %}
         </div>
     {% endif %}
+    {% if category_summary %}
+        <div class="dsn-category-chips">
+            <a class="dsn-cat-chip{% if not active_category_id %} dsn-cat-chip-active{% endif %}" href="{{ category_clear_url }}">Все категории</a>
+            {% for cat in category_summary %}
+                <a class="dsn-cat-chip{% if cat.id == active_category_id %} dsn-cat-chip-active{% endif %}" href="{{ cat.url }}">{{ cat.name }} <b>{{ cat.count }}</b></a>
+            {% endfor %}
+        </div>
+    {% endif %}
     <style>
         .dsn-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
         .dsn-status-summary { margin: 6px 0 4px; font-size: 12px; color: #555; }
         .dsn-status-summary-label { color: #888; margin-right: 4px; }
         .dsn-status-chip { white-space: nowrap; }
+        .dsn-category-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+        .dsn-cat-chip { display: inline-block; padding: 2px 8px; border: 1px solid #c8d1d9; border-radius: 12px;
+                        background: #f4f6f8; color: #2c3e50; font-size: 12px; text-decoration: none; white-space: nowrap; }
+        .dsn-cat-chip:hover { background: #e3e8ee; }
+        .dsn-cat-chip-active { background: #2c3e50; color: #fff; border-color: #2c3e50; }
+        .dsn-cat-chip-active:hover { background: #1a252f; color: #fff; }
+        .dsn-cat-chip b { font-weight: 600; opacity: 0.75; margin-left: 2px; }
     </style>
     <br/>
     {{ block.super }}

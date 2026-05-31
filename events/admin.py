@@ -246,6 +246,7 @@ class Events2PostAdmin(admin.ModelAdmin):
     ]
 
     list_editable = ["queue", "post_date", "main_category"]
+    list_select_related = ("main_category", "place")
     search_fields = ["title", "post", "address"]
     actions = [
         "prepare_events",
@@ -284,6 +285,7 @@ class Events2PostAdmin(admin.ModelAdmin):
     form = Events2PostAdminForm
 
     DEFAULT_HIDDEN_STATUSES = ['Posted', 'Spam', 'OnlyApi', 'Expired']
+    UPCOMING_STATUSES = ['ReadyToPost', 'OnlyApi', 'Posted']
 
     def get_changelist(self, request, **kwargs):
         return Events2PostChangeList
@@ -294,12 +296,22 @@ class Events2PostAdmin(admin.ModelAdmin):
             return queryset
         show = request.GET.get('show')
         if show == 'upcoming':
-            return queryset.filter(to_date__gte=timezone.now())
+            return queryset.filter(
+                to_date__gte=timezone.now(),
+                status__in=self.UPCOMING_STATUSES,
+            )
         if show == 'past':
             return queryset.filter(to_date__lt=timezone.now())
         if request.GET.get('all') == 'true':
             return queryset
         return queryset.exclude(status__in=self.DEFAULT_HIDDEN_STATUSES)
+
+    CATEGORY_PARAM = 'main_category__id__exact'
+
+    # Sidebar-агрегаты сканируют всю таблицу. Кэшируем на короткий TTL, чтобы не
+    # бить по БД на каждый рендер. Кэш per-worker (LocMemCache), точной инвалидации
+    # нет — окно устаревания ограничено только этим TTL. Сам список всегда свежий.
+    SUMMARY_CACHE_TTL = 30
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
@@ -309,6 +321,9 @@ class Events2PostAdmin(admin.ModelAdmin):
         extra_context['show_past_url'] = self._build_url(request, {'show': 'past'}, drop=['all'])
         extra_context['status_summary'] = self._get_status_summary()
         extra_context['date_counts'] = self._get_date_counts()
+        extra_context['category_summary'] = self._get_category_summary(request)
+        extra_context['category_clear_url'] = self._build_url(request, {}, drop=[self.CATEGORY_PARAM])
+        extra_context['active_category_id'] = request.GET.get(self.CATEGORY_PARAM, '')
         return super().changelist_view(request, extra_context=extra_context)
 
     def _build_url(self, request, params, drop=None):
@@ -326,6 +341,12 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     def _get_status_summary(self):
         from django.db.models import Count
+        from django.core.cache import cache
+
+        cache_key = 'events2post:status_summary'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         rows = (Events2Post.objects
                 .values('status')
@@ -334,17 +355,69 @@ class Events2PostAdmin(admin.ModelAdmin):
         counts = {row['status']: row['n'] for row in rows}
         ordered_keys = ['ReadyToPost', 'ForFuture', 'Scrape', 'Error', 'Rejected',
                         'OnlyApi', 'Posted', 'Spam', 'Expired']
-        return [(key, counts.get(key, 0), status_color.get(key, 'gray'))
-                for key in ordered_keys if counts.get(key, 0) > 0]
+        result = [(key, counts.get(key, 0), status_color.get(key, 'gray'))
+                  for key in ordered_keys if counts.get(key, 0) > 0]
+        cache.set(cache_key, result, self.SUMMARY_CACHE_TTL)
+        return result
 
     def _get_date_counts(self):
+        from django.db.models import Count
+        from django.core.cache import cache
+
+        cache_key = 'events2post:date_counts'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         now = timezone.now()
+        result = Events2Post.objects.aggregate(
+            # upcoming должен совпадать с тем, что показывает get_queryset(show=upcoming)
+            upcoming=Count('id', filter=Q(to_date__gte=now, status__in=self.UPCOMING_STATUSES)),
+            past=Count('id', filter=Q(to_date__lt=now)),
+            all=Count('id'),
+        )
+        cache.set(cache_key, result, self.SUMMARY_CACHE_TTL)
+        return result
+
+    def _base_queryset_for_date_filter(self, request):
+        """Mirror get_queryset's date/visibility logic but ignore category — used
+        for sidebar counters so they reflect the active date scope."""
         qs = Events2Post.objects.all()
-        return {
-            'upcoming': qs.filter(to_date__gte=now).count(),
-            'past': qs.filter(to_date__lt=now).count(),
-            'all': qs.count(),
-        }
+        show = request.GET.get('show')
+        if show == 'upcoming':
+            return qs.filter(to_date__gte=timezone.now(), status__in=self.UPCOMING_STATUSES)
+        if show == 'past':
+            return qs.filter(to_date__lt=timezone.now())
+        if request.GET.get('all') == 'true':
+            return qs
+        return qs.exclude(status__in=self.DEFAULT_HIDDEN_STATUSES)
+
+    def _get_category_summary(self, request):
+        from django.db.models import Count
+        from django.core.cache import cache
+
+        # Scope зависит от show/all — включаем его в ключ, чтобы не смешивать срезы.
+        scope = request.GET.get('show') or ('all' if request.GET.get('all') == 'true' else 'default')
+        cache_key = f'events2post:category_summary:{scope}'
+
+        counts = cache.get(cache_key)
+        if counts is None:
+            rows = (self._base_queryset_for_date_filter(request)
+                    .filter(main_category__isnull=False)
+                    .values('main_category_id', 'main_category__name')
+                    .annotate(n=Count('id'))
+                    .order_by('-n'))
+            counts = [(str(row['main_category_id']), row['main_category__name'], row['n'])
+                      for row in rows if row['n']]
+            cache.set(cache_key, counts, self.SUMMARY_CACHE_TTL)
+
+        # URL строится из текущего request.GET — вне кэша, иначе утекут чужие параметры.
+        return [{
+            'id': cat_id,
+            'name': name,
+            'count': count,
+            'url': self._build_url(request, {self.CATEGORY_PARAM: cat_id}),
+        } for cat_id, name, count in counts]
 
     def markdown_post_view(self, instance):
         return instance.markdown_post_view_model()
