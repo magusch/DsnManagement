@@ -73,6 +73,10 @@ class SourceFilter(admin.SimpleListFilter):
         'mts': ('MTS', 'MTS-'),
         'qtickets': ('Qtickets', 'QT-'),
         'vk': ('VK', 'VK-'),
+        'culture': ('Culture', 'CLTR-'),
+        'kassir': ('Kassir', 'KASSIR-'),
+        'cfg': ('Cfg', 'CFG-'),
+        'afisha': ('Afisha', 'AFISHA-'),
     }
 
     def lookups(self, request, model_admin):
@@ -83,6 +87,10 @@ class SourceFilter(admin.SimpleListFilter):
             ('mts', 'MTS'),
             ('qtickets', 'Qtickets'),
             ('vk', 'VK'),
+            ('culture', 'Culture'),
+            ('kassir', 'Kassir'),
+            ('cfg', 'Cfg'),
+            ('afisha', 'Afisha'),
             ('other', 'Other'),
         ]
 
@@ -99,6 +107,14 @@ class SourceFilter(admin.SimpleListFilter):
             return queryset.filter(event_id__startswith='MTS-')
         elif self.value() == 'vk':
             return queryset.filter(event_id__startswith='VK-')
+        elif self.value() == 'culture':
+            return queryset.filter(event_id__startswith='CLTR-')
+        elif self.value() == 'kassir':
+            return queryset.filter(event_id__startswith='KASSIR-')
+        elif self.value() == 'cfg':
+            return queryset.filter(event_id__startswith='CFG-')
+        elif self.value() == 'afisha':
+            return queryset.filter(event_id__startswith='AFISHA-')
         elif self.value() == 'other':
             q_objects = Q()
             for key, info in self.SOURCES.items():

@@ -66,11 +66,14 @@ class Source(models.TextChoices):
     RADARIO = 'RADARIO', 'Radario'
     TICKETSCLOUD = 'TC', 'Ticketscloud'
     QTICKETS = 'QT', 'QTickets'
-    CULTURE = 'CLTR', 'Culture'
+    CULTURE = 'CLTR', 'culture'
     MTS = 'MTS', 'MTS'
     VK = 'VK', 'VK'
     TG = 'TG', 'Telegram'
     AI = 'AI', 'AI'
+    KASSIR = 'KASSIR', 'kassir'
+    CFG = 'CFG', 'config'
+    AFISHA = 'AFISHA', 'afisha'
     OTHER = 'OTHER', 'Other'
 
 
