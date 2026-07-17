@@ -1,0 +1,109 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    <li>
+        <a href="#" class="addlink" id="sync-params-btn">Отправить параметры в API</a>
+    </li>
+{% endblock %}
+
+{% block result_list %}
+    <div style="margin: 8px 0 12px;">
+        <span id="param-api-status" style="margin-right: 8px;"></span>
+    </div>
+    {{ block.super }}
+    <div id="param-api-response-wrap" style="margin-top: 12px; display: none;">
+        <label>Ответ API:</label>
+        <pre id="param-api-response" style="max-height: 340px; overflow: auto; background: #f6f6f6; padding: 8px; border: 1px solid #ddd;"></pre>
+    </div>
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script>
+        (function() {
+            function setStatus(text, color) {
+                const el = document.getElementById('param-api-status');
+                if (!el) return;
+                el.textContent = text || '';
+                el.style.color = color || '';
+            }
+
+            function setResponse(obj) {
+                const wrap = document.getElementById('param-api-response-wrap');
+                const pre = document.getElementById('param-api-response');
+                if (!wrap || !pre) return;
+                if (obj === null || obj === undefined || obj === '') {
+                    wrap.style.display = 'none';
+                    pre.textContent = '';
+                    return;
+                }
+                wrap.style.display = 'block';
+                try {
+                    pre.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+                } catch (e) {
+                    pre.textContent = String(obj);
+                }
+            }
+
+            function collectParamsFromTable() {
+                // Collect minimal data if needed. Here we just send nothing, let API side load
+                return {};
+            }
+
+            function init() {
+                var btn = document.getElementById('sync-params-btn');
+                if (!btn) return;
+
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    setResponse(null);
+                    setStatus('Отправляю...', '#333');
+                    btn.classList.add('disabled');
+
+                    var data = {
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                        api_url: 'api/param',
+                        method: 'POST',
+                        data: collectParamsFromTable()
+                    };
+
+                    var $ = window.jQuery || (window.django ? window.django.jQuery : null);
+                    if (!$) {
+                        setStatus('jQuery не найдено в админке', 'red');
+                        btn.classList.remove('disabled');
+                        return;
+                    }
+
+                    $.ajax({
+                        url: '{% url 'channel_api' %}',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(data),
+                        success: function(response, textStatus, xhr) {
+                            setStatus('Готово (' + xhr.status + ')', 'green');
+                            setResponse(response);
+                            btn.classList.remove('disabled');
+                        },
+                        error: function(xhr) {
+                            var msg = 'Ошибка (' + xhr.status + ')';
+                            setStatus(msg, 'red');
+                            var body = xhr.responseText;
+                            try { body = JSON.parse(body); } catch (e) {}
+                            setResponse(body || msg);
+                            btn.classList.remove('disabled');
+                        }
+                    });
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+{% endblock %}
+
+

@@ -1,13 +1,20 @@
-import re
+import re, os
 
 from place.utils import address_from_places, place_orm_object
 
 from .datetime_helper import weekday_name, month_name
+from .markdown_v2 import escape_v2, escape_v2_url
+
+from category.models import SubCategory
 
 import pytz
 
 from datetime import datetime
 
+TELEGRAM_BOT_NAME = os.environ.get("TELEGRAM_BOT_NAME", None)
+
+EXHIBITION_CATEGORY_ID = 11
+EXHIBITION_MIN_DAYS = 8
 
 class PostHelper:
     def __init__(self, event):
@@ -29,16 +36,52 @@ class PostHelper:
         self.event.from_date = self.event.from_date.astimezone(self.TIMEZONE)
         self.event.to_date = self.event.to_date.astimezone(self.TIMEZONE)
 
+    def _is_long_exhibition(self):
+        main_cat_id = getattr(self.event, 'main_category_id', None)
+        if main_cat_id is None or main_cat_id == '':
+            return False
+        if int(main_cat_id) != EXHIBITION_CATEGORY_ID:
+            return False
+        date_from = self.event.from_date
+        date_to = self.event.to_date
+        if date_to is None:
+            return False
+        return (date_to - date_from).days >= EXHIBITION_MIN_DAYS
+
+    def _get_exhibition_schedule(self):
+        place_id = getattr(self.event, 'place_id', None)
+        if place_id:
+            place = place_orm_object(place_id)
+            if place:
+                schedule_str = place.get_schedule_str()
+                if schedule_str:
+                    return schedule_str
+
+        # Fallback: расписание из времени события
+        date_from = self.event.from_date
+        date_to = self.event.to_date
+        if date_from and date_to:
+            s_hour = date_from.hour
+            s_minute = date_from.minute
+            e_hour = date_to.hour
+            e_minute = date_to.minute
+            if s_hour != 0 or s_minute != 0 or e_hour != 0 or e_minute != 0:
+                from .datetime_helper import WEEKNAMES
+                day_from = WEEKNAMES[date_from.weekday()]
+                day_to = WEEKNAMES[date_to.weekday()]
+                return f"{day_from}-{day_to} {s_hour:02}:{s_minute:02}–{e_hour:02}:{e_minute:02}"
+
+        return None
+
     def get_event_name(self):
         return f"Event: {self.title}"
 
     def _title_markdown(self):
         title = self.event.title
-        title = title.replace("`", r"\`").replace("_", r"\_").replace("*", r"\*")
-
-        # title = re.sub(r"[\"'‘](?=[^\ \.!\n])", "«", title)
-        # title = re.sub(r"[\"'‘](?=[^a-zA-Zа-яА-Я0-9]|$)", "»", title)
-        title = re.sub(r'["\'](\S.*?)["\']', r'«\1»', title)
+        # Replace quotes with guillemets before escaping
+        title = re.sub(r"[\"’](\S.*?)[\"’]", r"«\1»", title)
+        # Escape all V2 special chars in the title text
+        title = escape_v2(title)
 
         if '«' in title and '»' in title:
             pattern = r'(«[^»]*»)'
@@ -63,56 +106,83 @@ class PostHelper:
 
         full_title = f"*{title_date}* {title}\n\n"
 
-        if self.event.full_text is None:
-            post_text = self.event.post
+        if not self.event.prepared_text and not self.event.full_text :
+            post_text = ""
+        elif not self.event.prepared_text:
+            post_text = self.reduce_text(self.event.full_text)
         else:
-            post_text = self.reduce_text()
+            post_text = self.reduce_text(self.event.prepared_text)
 
-        post_text = (
-            post_text.strip()
-                .replace("`", r"\`")
-                .replace("_", r"\_")
-                .replace("*", r"\*")
-        )
+        post_text = escape_v2(post_text.strip())
 
         address_line = self.address_markdown()
 
         footer_link = self.param_manager.get_parameter('finish_link')
-        if not footer_link: footer_link = ''
+        if not footer_link:
+            footer_link = ''
+        else:
+            footer_link = escape_v2(footer_link)
+
+        remind_link = ''
+        if TELEGRAM_BOT_NAME is not None and hasattr(self.event, 'id'):
+            bot_url = escape_v2_url(f"https://t.me/{TELEGRAM_BOT_NAME}?start=save-{self.event.id}")
+            remind_link = f"\\|\\| [Сохранить в боте]({bot_url})"
+
+        if hasattr(self.event, 'ticket_url') and self.event.ticket_url:
+            event_url = self.event.ticket_url
+        else:
+            event_url = self.event.url
+
+        escaped_price = escape_v2(self.event.price)
+        escaped_event_url = escape_v2_url(event_url)
+        escaped_date = escape_v2(date_from_to)
 
         footer = (
             "\n\n"
             f"*Где:* {address_line}\n"
-            f"*Когда:* {date_from_to} \n"
-            f"*Вход:* [{self.event.price}]({self.event.url})"
-            f"\n\n{footer_link}"
+            f"*Когда:* {escaped_date} \n"
+            f"*Вход:* [{escaped_price}]({escaped_event_url})"
+            f"\n\n{footer_link} {remind_link}"
         )
 
         full_post = (full_title + post_text.strip() + footer).strip()
+
+        # Replace unicode emojis with custom Telegram emojis where mapping exists
+        # from category.emoji_manager import EmojiManager
+        # full_post = EmojiManager().replace_emojis(full_post)
+
         return full_post
 
     def address_markdown(self):
         address_line = None
+
+        need_address_line_url = self.param_manager.get_parameter('need_address_line_url')
+        if need_address_line_url:
+            if need_address_line_url.lower() in ('true', '1'):
+                need_address_line_url = True
+            else:
+                need_address_line_url = False
+
         if hasattr(self.event, 'place_id'):
             if self.event.place_id:
                 place = place_orm_object(self.event.place_id)
-                address_line = place.markdown_address()
+                address_line = place.markdown_address(need_address_line_url)
 
         if address_line is None:
             raw_address = self.event.address
             addresses = address_from_places(raw_address)
 
             if addresses:
-                address_line = addresses[0].place.markdown_address()
+                address_line = addresses[0].place.markdown_address(need_address_line_url)
                 if hasattr(self.event, 'place_id'):
                     self.event.place_id = addresses[0].place.id
             else:
-                need_address_line_url = self.param_manager.get_parameter('need_address_line_url')
-                if need_address_line_url and need_address_line_url.lower() in ('true', '1'):
-                    address_line = \
-                        f"[{self.event.address}](https://2gis.ru/spb/search/{self.event.address})"
+                escaped_addr = escape_v2(self.event.address)
+                if need_address_line_url:
+                    addr_url = escape_v2_url(f"https://2gis.ru/spb/search/{self.event.address}")
+                    address_line = f"[{escaped_addr}]({addr_url})"
                 else:
-                    address_line = self.event.address
+                    address_line = escaped_addr
 
         return address_line
 
@@ -132,6 +202,12 @@ class PostHelper:
     def date_to_title(self):
         date_from = self.event.from_date
         date_to = self.event.to_date
+
+        if self._is_long_exhibition():
+            return "До {day} {month}".format(
+                day=date_to.day,
+                month=month_name(date_to),
+            )
 
         if date_to is None:
             title_date = "{day} {month}".format(
@@ -165,6 +241,11 @@ class PostHelper:
         return title_date
 
     def date_to_post(self):
+        if self._is_long_exhibition():
+            schedule = self._get_exhibition_schedule()
+            if schedule:
+                return schedule
+
         date_from = self.event.from_date
         date_to = self.event.to_date
 
@@ -198,8 +279,12 @@ class PostHelper:
 
         return start_format + end_format
 
-    def reduce_text(self):
-        post_text = self.event.full_text
+    def main_category(self):
+        if hasattr(self.event, 'category') and self.event.category is not None:
+            subcategory, created = SubCategory.objects.get_or_create(name=self.event.category)
+            return subcategory.category
+
+    def reduce_text(self, post_text):
         if len(post_text) > 550:
             sentences = post_text.split(".")
             post = ""
@@ -207,7 +292,7 @@ class PostHelper:
                 if len(post) < 365:
                     post = post + s + "."
                 else:
-                    post_text = post
+                    post_text = post.strip()
                     break
         return post_text
 

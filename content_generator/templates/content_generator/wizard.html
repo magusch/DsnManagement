@@ -1,0 +1,696 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<script>
+    document.addEventListener('htmx:configRequest', function(event) {
+        var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfInput) {
+            event.detail.headers['X-CSRFToken'] = csrfInput.value;
+        }
+    });
+</script>
+<style>
+    .wizard-section {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .wizard-section h2 {
+        margin-top: 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #417690;
+        color: #417690;
+        font-size: 16px;
+    }
+    .wizard-section h2 .step-num {
+        display: inline-block;
+        width: 28px;
+        height: 28px;
+        line-height: 28px;
+        text-align: center;
+        background: #417690;
+        color: #fff;
+        border-radius: 50%;
+        margin-right: 8px;
+        font-size: 14px;
+    }
+    .filter-row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .filter-row label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 4px;
+        font-size: 13px;
+    }
+    .filter-row select, .filter-row input {
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    .btn {
+        display: inline-block;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        text-decoration: none;
+        color: #fff;
+    }
+    .btn-primary { background: #417690; }
+    .btn-primary:hover { background: #205067; }
+    .btn-success { background: #28a745; }
+    .btn-success:hover { background: #218838; }
+    .btn-ai { background: #6f42c1; }
+    .btn-ai:hover { background: #5a32a3; }
+    .btn-save { background: #fd7e14; }
+    .btn-save:hover { background: #e8590c; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #events-container table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    #events-container th, #events-container td {
+        padding: 6px 10px;
+        border-bottom: 1px solid #eee;
+        text-align: left;
+        font-size: 13px;
+    }
+    #events-container th {
+        background: #f8f8f8;
+        font-weight: bold;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    #events-container tbody tr { cursor: pointer; transition: background-color 0.1s; }
+    #events-container tr:hover { background: #f5f9fc; }
+    #events-container tr.unchecked { opacity: 0.4; }
+    #events-container tr.selected-row { background-color: #fffde7; }
+    #events-container tr.selected-row:hover { background-color: #fff9c4; }
+
+    .events-wrapper {
+        max-height: 500px;
+        overflow-y: auto;
+        border: 1px solid #eee;
+        border-radius: 4px;
+    }
+
+    .counter-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        font-size: 13px;
+        color: #666;
+    }
+    .counter-bar .count { font-weight: bold; color: #417690; }
+
+    .generate-row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+    .generate-row .field-group label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 4px;
+        font-size: 13px;
+    }
+
+    #post-preview {
+        min-height: 60px;
+    }
+    #post-preview .post-content {
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 16px;
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 13px;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    #post-preview textarea {
+        width: 100%;
+        min-height: 300px;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+    }
+    .info-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        color: #fff;
+    }
+    .info-badge.warning { background: #ffc107; color: #333; }
+    .info-badge.success { background: #28a745; }
+    .info-badge.info { background: #17a2b8; }
+
+    .error-msg {
+        color: #dc3545;
+        padding: 10px;
+        background: #f8d7da;
+        border-radius: 4px;
+    }
+
+    .htmx-indicator {
+        display: none;
+    }
+    .htmx-request .htmx-indicator {
+        display: inline-block;
+    }
+    .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #ccc;
+        border-top-color: #417690;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        vertical-align: middle;
+        margin-left: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .select-tools { display: flex; gap: 6px; }
+    .select-tools a {
+        font-size: 12px;
+        color: #417690;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 1100px; margin: 0 auto; padding: 20px 0;">
+
+    <!-- Step 1: Filters -->
+    <div class="wizard-section" id="step-filters">
+        <h2><span class="step-num">1</span> Выберите фильтр</h2>
+        <div class="filter-row">
+            <div>
+                <label for="filter-set-select">Набор фильтров</label>
+                <select id="filter-set-select" name="filter_set_id">
+                    <option value="">— выберите —</option>
+                    {% for fs in filter_sets %}
+                        <option value="{{ fs.id }}">{{ fs.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button class="btn btn-primary"
+                        hx-post="{% url 'cg_apply_filters' %}"
+                        hx-target="#events-container"
+                        hx-include="#filter-set-select"
+                        hx-indicator="#filter-spinner">
+                    Применить фильтр
+                </button>
+                <span id="filter-spinner" class="htmx-indicator"><span class="spinner"></span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Event selection -->
+    <div class="wizard-section" id="step-events">
+        <h2><span class="step-num">2</span> Подборка мероприятий</h2>
+        <div id="events-container">
+            <p style="color: #999;">Сначала примените фильтр, чтобы загрузить мероприятия.</p>
+        </div>
+    </div>
+
+    <!-- Step 3: Generate post -->
+    <div class="wizard-section" id="step-generate">
+        <h2><span class="step-num">3</span> Генерация поста</h2>
+        <div class="generate-row">
+            <div class="field-group">
+                <label for="template-select">Шаблон</label>
+                <select id="template-select" name="template_id" onchange="showTemplatePreview()">
+                    <option value="">— без шаблона —</option>
+                    {% for t in templates %}
+                        <option value="{{ t.id }}">{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <div id="template-preview" style="display:none; margin-top:6px; padding:8px; background:#f8f9fa; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:12px; white-space:pre-wrap; max-width:600px; color:#555;"></div>
+            </div>
+            <div class="field-group">
+                <label for="max-events">Лимит событий</label>
+                <input type="number" id="max-events" name="max_events" value="15" min="1" max="100" style="width:70px;">
+            </div>
+            <div>
+                <button class="btn btn-success" id="btn-generate-code" onclick="generatePost('code')" disabled>
+                    Собрать кодом
+                </button>
+                <button class="btn btn-ai" id="btn-generate-ai" onclick="generatePost('ai')" disabled>
+                    Собрать ИИ
+                </button>
+                <span id="generate-spinner" class="htmx-indicator"><span class="spinner"></span></span>
+            </div>
+        </div>
+        <div id="post-preview" style="margin-top: 16px;">
+            <p style="color: #999;">Выберите мероприятия и нажмите кнопку генерации.</p>
+        </div>
+    </div>
+
+</div>
+
+{{ template_data|json_script:"template-data" }}
+<script>
+    var TEMPLATES = JSON.parse(document.getElementById('template-data').textContent);
+
+    window.showTemplatePreview = function() {
+        var sel = document.getElementById('template-select');
+        var preview = document.getElementById('template-preview');
+        var text = TEMPLATES[sel.value];
+        if (text) {
+            preview.textContent = text;
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    };
+</script>
+<script>
+(function() {
+    var MONTHS = ['', 'января','февраля','марта','апреля','мая','июня',
+                  'июля','августа','сентября','октября','ноября','декабря'];
+
+    function buildTitle() {
+        var filterSelect = document.getElementById('filter-set-select');
+        var filterName = filterSelect.options[filterSelect.selectedIndex].text || '';
+        if (filterName.indexOf('—') === 0) filterName = '';
+
+        var checkboxes = document.querySelectorAll('#events-container input.event-cb:checked');
+        var dates = [];
+        checkboxes.forEach(function(cb) {
+            var d = cb.getAttribute('data-date');
+            if (d) dates.push(d);
+        });
+        dates.sort();
+
+        var dateRange = '';
+        if (dates.length > 0) {
+            var minParts = dates[0].split('-');
+            var maxParts = dates[dates.length - 1].split('-');
+            var minDay = parseInt(minParts[2]), minMonth = parseInt(minParts[1]);
+            var maxDay = parseInt(maxParts[2]), maxMonth = parseInt(maxParts[1]);
+
+            if (dates[0] === dates[dates.length - 1]) {
+                dateRange = minDay + ' ' + MONTHS[minMonth];
+            } else if (minMonth === maxMonth) {
+                dateRange = minDay + '–' + maxDay + ' ' + MONTHS[minMonth];
+            } else {
+                dateRange = minDay + ' ' + MONTHS[minMonth] + ' – ' + maxDay + ' ' + MONTHS[maxMonth];
+            }
+        }
+
+        var parts = [];
+        if (filterName) parts.push(filterName);
+        if (dateRange) parts.push(dateRange);
+        return parts.join(', ') || 'Подборка мероприятий';
+    }
+
+    // Track checked event count
+    function getCheckedIds() {
+        var checkboxes = document.querySelectorAll('#events-container input.event-cb:checked');
+        var ids = [];
+        checkboxes.forEach(function(cb) { ids.push(cb.value); });
+        return ids;
+    }
+
+    function updateCounter() {
+        var total = document.querySelectorAll('#events-container input.event-cb').length;
+        var checked = document.querySelectorAll('#events-container input.event-cb:checked').length;
+        var counter = document.getElementById('selected-counter');
+        if (counter) counter.textContent = checked + ' из ' + total;
+
+        var btnCode = document.getElementById('btn-generate-code');
+        var btnAi = document.getElementById('btn-generate-ai');
+        if (btnCode) btnCode.disabled = checked === 0;
+        if (btnAi) btnAi.disabled = checked === 0;
+    }
+
+    // Delegate change events on checkboxes
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('event-cb')) {
+            var row = e.target.closest('tr');
+            if (row) { row.classList.toggle('unchecked', !e.target.checked); row.classList.toggle('selected-row', e.target.checked); }
+            updateCounter();
+        }
+        if (e.target.id === 'event-toggle-all') {
+            var cbs = document.querySelectorAll('#events-container input.event-cb');
+            cbs.forEach(function(cb) {
+                cb.checked = e.target.checked;
+                var row = cb.closest('tr');
+                if (row) { row.classList.toggle('unchecked', !cb.checked); row.classList.toggle('selected-row', cb.checked); }
+            });
+            updateCounter();
+        }
+    });
+
+    // Select tools
+    window.selectAll = function() {
+        document.querySelectorAll('#events-container input.event-cb').forEach(function(cb) {
+            cb.checked = true;
+            var row = cb.closest('tr'); if (row) { row.classList.remove('unchecked'); row.classList.add('selected-row'); }
+        });
+        var toggle = document.getElementById('event-toggle-all');
+        if (toggle) toggle.checked = true;
+        updateCounter();
+    };
+    window.selectNone = function() {
+        document.querySelectorAll('#events-container input.event-cb').forEach(function(cb) {
+            cb.checked = false;
+            var row = cb.closest('tr'); if (row) { row.classList.add('unchecked'); row.classList.remove('selected-row'); }
+        });
+        var toggle = document.getElementById('event-toggle-all');
+        if (toggle) toggle.checked = false;
+        updateCounter();
+    };
+    window.selectInvert = function() {
+        document.querySelectorAll('#events-container input.event-cb').forEach(function(cb) {
+            cb.checked = !cb.checked;
+            var row = cb.closest('tr'); if (row) { row.classList.toggle('unchecked', !cb.checked); row.classList.toggle('selected-row', cb.checked); }
+        });
+        updateCounter();
+    };
+
+    function initTableInteractions() {
+        var checkboxes = Array.from(document.querySelectorAll('#events-container input.event-cb'));
+        var lastChecked = null;
+
+        // Mark initially checked rows
+        checkboxes.forEach(function(cb) {
+            var row = cb.closest('tr');
+            if (row && cb.checked) row.classList.add('selected-row');
+        });
+
+        // Row click toggles selection
+        document.querySelectorAll('#events-container tbody tr').forEach(function(row) {
+            row.addEventListener('click', function(e) {
+                if (e.target.closest('a, input, button, select, textarea')) return;
+                var cb = row.querySelector('input.event-cb');
+                if (!cb) return;
+                if (e.shiftKey && lastChecked) {
+                    var all = Array.from(document.querySelectorAll('#events-container input.event-cb'));
+                    var start = all.indexOf(cb);
+                    var end = all.indexOf(lastChecked);
+                    var lo = Math.min(start, end), hi = Math.max(start, end);
+                    for (var i = lo; i <= hi; i++) {
+                        all[i].checked = lastChecked.checked;
+                        var r = all[i].closest('tr');
+                        if (r) { r.classList.toggle('unchecked', !all[i].checked); r.classList.toggle('selected-row', all[i].checked); }
+                    }
+                } else {
+                    cb.checked = !cb.checked;
+                    row.classList.toggle('unchecked', !cb.checked);
+                    row.classList.toggle('selected-row', cb.checked);
+                }
+                lastChecked = cb;
+                updateCounter();
+            });
+        });
+
+        // Shift+click on checkboxes for range selection
+        checkboxes.forEach(function(cb) {
+            cb.addEventListener('click', function(e) {
+                if (e.shiftKey && lastChecked && lastChecked !== cb) {
+                    var all = Array.from(document.querySelectorAll('#events-container input.event-cb'));
+                    var start = all.indexOf(cb);
+                    var end = all.indexOf(lastChecked);
+                    var lo = Math.min(start, end), hi = Math.max(start, end);
+                    for (var i = lo; i <= hi; i++) {
+                        all[i].checked = lastChecked.checked;
+                        var row = all[i].closest('tr');
+                        if (row) { row.classList.toggle('unchecked', !all[i].checked); row.classList.toggle('selected-row', all[i].checked); }
+                    }
+                    updateCounter();
+                }
+                lastChecked = cb;
+            });
+        });
+    }
+
+    // After HTMX swaps in the events table, re-init counter and interactions
+    document.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail.target.id === 'events-container') {
+            updateCounter();
+            initTableInteractions();
+        }
+    });
+
+    function getCsrfToken() {
+        var input = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (input) return input.value;
+        var match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '';
+    }
+
+    var GENERATE_URL = '{% url "cg_generate_post" %}';
+    var CHECK_TASK_URL = '{% url "cg_check_task" %}';
+    var SAVE_URL = '{% url "cg_save_post" %}';
+    var POLL_INTERVAL = 5000;
+    var POLL_TIMEOUT = 60000;
+
+    function setPreview(html) {
+        document.getElementById('post-preview').innerHTML = html;
+    }
+
+    function setStatus(text, color) {
+        setPreview('<p style="color:' + (color || '#999') + ';"><span class="spinner"></span> ' + text + '</p>');
+    }
+
+    function getCheckedImages() {
+        var imgs = [];
+        document.querySelectorAll('#events-container input.event-cb:checked').forEach(function(cb) {
+            var img = cb.getAttribute('data-image');
+            if (img) imgs.push(img);
+        });
+        return imgs.filter(function(v, i, a) { return a.indexOf(v) === i; });
+    }
+
+    function showPostResult(content, eventIds, method, fallback, extra) {
+        content = (content === undefined || content === null) ? '' : content;
+        extra = extra || {};
+        var badge = method === 'ai'
+            ? '<span class="info-badge info">ИИ</span>'
+            : '<span class="info-badge success">Шаблон</span>';
+        var fallbackBadge = fallback
+            ? ' <span class="info-badge warning">fallback — API недоступен</span>'
+            : '';
+
+        var postTitle = extra.title || buildTitle();
+        var postImage = extra.image || '';
+
+        var images = getCheckedImages();
+        var mediaFiles = images;
+        if (postImage && mediaFiles.indexOf(postImage) === -1) {
+            mediaFiles = [postImage].concat(mediaFiles);
+        }
+
+        var imageHtml = '';
+        if (postImage) {
+            imageHtml = '<div style="margin-top:10px;">'
+                + '<label style="font-weight:bold;font-size:13px;">Обложка (коллаж):</label>'
+                + '<div style="margin-top:6px;"><img src="' + escapeHtml(postImage) + '" style="max-width:400px;max-height:300px;border-radius:4px;border:1px solid #ddd;"></div>'
+                + '</div>';
+        }
+
+        var imagesInfo = mediaFiles.length > 0
+            ? '<span class="info-badge info">' + mediaFiles.length + ' картинок будет прикреплено</span>'
+            : '<span style="color:#999;font-size:12px;">Нет картинок</span>';
+
+        var html = '<div style="margin-bottom:10px;">' + badge + fallbackBadge + '</div>'
+            + '<div style="margin-bottom:10px;">'
+            + '<label for="post-title-input" style="font-weight:bold;font-size:13px;">Заголовок поста:</label>'
+            + '<input type="text" id="post-title-input" value="' + escapeHtml(postTitle) + '" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;" placeholder="Подборка мероприятий">'
+            + '</div>'
+            + '<textarea id="post-content-edit">' + escapeHtml(content) + '</textarea>'
+            + '<input type="hidden" id="post-event-ids" value="' + eventIds + '">'
+            + '<input type="hidden" id="post-media-files" value="' + escapeHtml(JSON.stringify(mediaFiles)) + '">'
+            + '<input type="hidden" id="post-image" value="' + escapeHtml(postImage) + '">'
+            + imageHtml
+            + '<div style="margin-top:8px;">' + imagesInfo + '</div>'
+            + '<div style="margin-top:12px;display:flex;gap:10px;">'
+            + '<button class="btn btn-save" onclick="savePost()">Сохранить пост</button>'
+            + '</div>';
+        setPreview(html);
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    // Poll for async task result
+    function pollTask(taskId, eventIds, method) {
+        var elapsed = 0;
+        var interval = setInterval(function() {
+            elapsed += POLL_INTERVAL;
+
+            var formData = new FormData();
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+            formData.append('task_id', taskId);
+
+            fetch(CHECK_TASK_URL, { method: 'POST', body: formData })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // API returns {status, result: {id, title, content, image, ...}}
+                var r = data.result || data;
+                if (data.status === 'success' || r.content) {
+                    clearInterval(interval);
+                    var content = (typeof r === 'object') ? (r.content || r.post || JSON.stringify(r)) : r;
+                    showPostResult(content, eventIds, method, false, {
+                        image: r.image || data.image || '',
+                        title: r.title || data.title || ''
+                    });
+                } else if (data.error || data.status === 'error' || data.status === 'failed') {
+                    clearInterval(interval);
+                    var errMsg = data.error || data.message || 'неизвестная ошибка';
+                    setStatus('API ошибка: ' + errMsg + '. Пробую локально...', '#b36b00');
+                    fallbackLocal(eventIds, method);
+                }
+                // else still pending — keep polling
+            })
+            .catch(function() {
+                clearInterval(interval);
+                setStatus('Потеряна связь с API. Пробую локально...', '#b36b00');
+                fallbackLocal(eventIds, method);
+            });
+
+            if (elapsed >= POLL_TIMEOUT) {
+                clearInterval(interval);
+                setStatus('Таймаут ожидания API. Пробую локально...', '#b36b00');
+                fallbackLocal(eventIds, method);
+            }
+        }, POLL_INTERVAL);
+    }
+
+    // Fallback: generate locally in Django (only for code method)
+    function fallbackLocal(eventIdsStr, method) {
+        if (method !== 'code') {
+            setPreview('<p class="error-msg">AI-генерация доступна только через API. Попробуйте позже или используйте "Собрать кодом".</p>');
+            return;
+        }
+
+        var ids = eventIdsStr.split(',');
+        var formData = new FormData();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        ids.forEach(function(id) { formData.append('event_ids', id); });
+        formData.append('method', 'code');
+        formData.append('fallback', '1');
+        formData.append('template_id', document.getElementById('template-select').value);
+        formData.append('max_events', document.getElementById('max-events').value);
+
+        fetch(GENERATE_URL, { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                setPreview('<p class="error-msg">' + data.error + '</p>');
+            } else {
+                showPostResult(data.content || '', eventIdsStr, 'code', true);
+            }
+        })
+        .catch(function(err) {
+            setPreview('<p class="error-msg">Ошибка: ' + err.message + '</p>');
+        });
+    }
+
+    // Main generate function — sends to API, handles async + fallback
+    window.generatePost = function(method) {
+        var ids = getCheckedIds();
+        if (ids.length === 0) return;
+        var eventIdsStr = ids.join(',');
+
+        setStatus(method === 'ai' ? 'Отправляю на ИИ...' : 'Отправляю на API...', '#333');
+
+        var formData = new FormData();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        ids.forEach(function(id) { formData.append('event_ids', id); });
+        formData.append('method', method);
+        formData.append('title', buildTitle());
+
+        if (method === 'code') {
+            formData.append('template_id', document.getElementById('template-select').value);
+            formData.append('max_events', document.getElementById('max-events').value);
+        }
+
+        fetch(GENERATE_URL, { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                setStatus('API: ' + data.error + '. Пробую локально...', '#b36b00');
+                fallbackLocal(eventIdsStr, method);
+            } else if (data.task_id) {
+                setStatus('Задача отправлена. Ожидание результата...', '#333');
+                pollTask(data.task_id, eventIdsStr, method);
+            } else if (data.content !== undefined) {
+                showPostResult(data.content || '', eventIdsStr, method, false, {
+                    image: data.image || '',
+                    title: data.title || ''
+                });
+            } else {
+                console.warn('[CG] Unexpected response:', Object.keys(data));
+                setPreview('<p class="error-msg">Пустой ответ от сервера</p>');
+            }
+        })
+        .catch(function(err) {
+            console.error('[CG]', err);
+            setStatus('Нет связи с сервером. Пробую локально...', '#b36b00');
+            fallbackLocal(eventIdsStr, method);
+        });
+    };
+
+    // Save post
+    window.savePost = function() {
+        var content = document.getElementById('post-content-edit');
+        var titleEl = document.getElementById('post-title-input');
+        var eventIds = document.getElementById('post-event-ids');
+        if (!content) return;
+
+        var formData = new FormData();
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        formData.append('content', content.value);
+        formData.append('title', titleEl ? titleEl.value : '');
+        formData.append('event_ids', eventIds ? eventIds.value : '');
+        var mediaFiles = document.getElementById('post-media-files');
+        formData.append('media_files', mediaFiles ? mediaFiles.value : '[]');
+        var postImage = document.getElementById('post-image');
+        formData.append('image', postImage ? postImage.value : '');
+
+        fetch(SAVE_URL, { method: 'POST', body: formData })
+        .then(function(response) { return response.text(); })
+        .then(function(html) { setPreview(html); })
+        .catch(function(err) {
+            setPreview('<p class="error-msg">Ошибка сохранения: ' + err.message + '</p>');
+        });
+    };
+})();
+</script>
+
+<!-- Hidden CSRF token for HTMX -->
+<form style="display:none;">{% csrf_token %}</form>
+
+{% endblock %}

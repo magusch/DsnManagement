@@ -24,36 +24,90 @@
 {% endif %}
 
 {% block content %}<div id="content-main">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
+<script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
 
-        {% if original.id %}
-          var remake_post_url = '{% url 'remake_post' id=original.id %}';
-          var remake_post_ai_url = '{% url 'remake_post_by_ai' id=original.id %}';
-        {% else %}
-          {# Handle the case when original.id is not defined or empty #}
-          var remake_post_url = '{% url 'remake_post_empty' %}';
-          var remake_post_ai_url = '{% url 'remake_empty_post_by_ai' %}';
-        {% endif %}
+{% comment %} Provide URLs via data-* so JS has no template tags {% endcomment %}
+<div id="ai-url-config"
+     data-channel-api-url="{% url 'channel_api' %}"
+     {% if original.id %}
+     data-remake-post-url="{% url 'remake_post' id=original.id %}"
+     data-remake-post-ai-url="{% url 'remake_post_by_ai' id=original.id %}"
+     {% else %}
+     data-remake-post-url="{% url 'remake_post_empty' %}"
+     data-remake-post-ai-url="{% url 'remake_empty_post_by_ai' %}"
+     {% endif %}
+></div>
+
+<script>
+// eslint-disable-next-line
+// @ts-nocheck
+
+        var __cfg = document.getElementById('ai-url-config');
+        var channel_api_url = __cfg ? __cfg.getAttribute('data-channel-api-url') : '';
+        var remake_post_url = __cfg ? __cfg.getAttribute('data-remake-post-url') : '';
+        var remake_post_ai_url = __cfg ? __cfg.getAttribute('data-remake-post-ai-url') : '';
+
+        let initial_event
+
+        function parsePriceInt(priceText) {
+            if (!priceText) return null;
+            var text = priceText.trim().toLowerCase();
+            if (['бесплатно', 'free', 'вход свободный', 'свободный вход', 'свободный'].some(function(kw) { return text.indexOf(kw) !== -1; })) return 0;
+            var nums = text.replace(/\s/g, '').match(/\d+/);
+            return nums ? parseInt(nums[0], 10) : null;
+        }
+
+        function applyResponseData(data) {
+            for (var key in data) {
+                if (!data.hasOwnProperty(key)) continue;
+                var value = data[key];
+                if ((key === 'from_date' || key === 'to_date') && typeof value === 'string' && value.indexOf('T') !== -1) {
+                    try {
+                        var dateObj = new Date(value);
+                        var dateStr = dateObj.toISOString().split('T')[0];
+                        var timeStr = dateObj.toTimeString().split(' ')[0].substring(0, 5);
+                        var dateEl = document.getElementById('id_' + key + '_0');
+                        var timeEl = document.getElementById('id_' + key + '_1');
+                        if (dateEl) dateEl.value = dateStr;
+                        if (timeEl) timeEl.value = timeStr;
+                    } catch (e) {
+                        var el = document.getElementById('id_' + key);
+                        if (el) el.value = value;
+                    }
+                } else {
+                    var el = document.getElementById('id_' + key);
+                    if (el) el.value = value;
+                }
+            }
+            // Auto-fill price_int from price if not already in response
+            if (data.price && !data.price_int) {
+                var priceInt = parsePriceInt(data.price);
+                if (priceInt !== null) {
+                    var priceIntEl = document.getElementById('id_price_int');
+                    if (priceIntEl) priceIntEl.value = priceInt;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initial_event = getEventValues()
+        }, false);
+
 
 
         function remakePost() {
-            var from_date = document.getElementById('id_from_date_0').value + ' ' + document.getElementById('id_from_date_1').value
-            var to_date = document.getElementById('id_to_date_0').value + ' ' + document.getElementById('id_to_date_1').value
-
-            var place_id = document.getElementById('id_place').value
-
-            var data = {
+            let event_data = getEventValues()
+            let data = {
                 csrfmiddlewaretoken: '{{ csrf_token }}',
                 id: '{{ original.id }}',
-                place_id: place_id,
-                title: document.getElementById('id_title').value,
-                full_text: document.getElementById('id_full_text').value,
-                url: document.getElementById('id_url').value,
-                price: document.getElementById('id_price').value,
-                address: document.getElementById('id_address').value,
-                from_date: from_date,
-                to_date: to_date,
+                ...event_data
+            };
+
+            //Object.assign(data, event_data)
+
+            let isReadyCheckbox = document.querySelector('input[name="is_ready"]');
+            if (isReadyCheckbox) {
+                isReadyCheckbox.checked = true;
             };
 
             $.ajax({
@@ -62,17 +116,7 @@
                 dataType: 'json',
                 data,
                 success: function(response) {
-
-                    // Put all data from remake_post_url in fields with id="id_#{key}"
-                    var data = response;
-                    for (const key in data) {
-                        if (data.hasOwnProperty(key)) {
-                            const element = document.getElementById(`id_${key}`);
-                            if (element) {
-                                element.value = data[key];
-                            }
-                        }
-                    }
+                    applyResponseData(response);
                 },
                 error: function(xhr, status, error) {
                     console.error(error);
@@ -80,23 +124,13 @@
             });
         }
 
-        function remakePostByAi() {
-            var from_date = document.getElementById('id_from_date_0').value + ' ' + document.getElementById('id_from_date_1').value
-            var to_date = document.getElementById('id_to_date_0').value + ' ' + document.getElementById('id_to_date_1').value
-
-            var place_id = document.getElementById('id_place').value
-
-            var data = {
+        function remakePostByAiLocal() {
+            let event_data = getEventValues()
+            setAPIStatus('Посылание запроса локально..', 'red');
+            let data = {
                 csrfmiddlewaretoken: '{{ csrf_token }}',
                 id: '{{ original.id }}',
-                place_id: place_id,
-                title: document.getElementById('id_title').value,
-                full_text: document.getElementById('id_full_text').value,
-                url: document.getElementById('id_url').value,
-                price: document.getElementById('id_price').value,
-                address: document.getElementById('id_address').value,
-                from_date: from_date,
-                to_date: to_date,
+                ...event_data
             };
 
             $.ajax({
@@ -105,47 +139,248 @@
                 dataType: 'json',
                 data,
                 success: function(response) {
-                    var data = response[0];
-                    for (const key in data) {
-                        if (data.hasOwnProperty(key)) {
-                            const element = document.getElementById(`id_${key}`);
-                            if (element) {
-                                element.value = data[key];
-                            }
-                        }
-                    }
+                    setAPIStatus('Результат успешно получен. Обновление данных.', 'green');
+                    applyResponseData(response[0]);
+                    setAPIStatus('Данные обновлены.', 'green');
                 },
                 error: function(xhr, status, error) {
                     console.error(error);
+                    setAPIStatus('Ошибка.', 'red');
                 }
             });
         }
 
+        function getEventValues() {
+            let from_date = document.getElementById('id_from_date_0').value + ' ' + document.getElementById('id_from_date_1').value
+            let to_date = document.getElementById('id_to_date_0').value + ' ' + document.getElementById('id_to_date_1').value
 
-        (function ($) {
-            $(document).ready(function () {
-                $('.place-autocomplete').on('input', function () {
-                    var query = $(this).val();
-                    if (query.length>1) {
-                        $.get('/place/place-autocomplete/', {query: query}, function (data) {
-                            var resultsDiv = $('#place-autocomplete-results');
-                            resultsDiv.empty();
-                            data.results.forEach(function (result) {
-                                resultsDiv.append('<div><a href="#" data-id="' + result.id + '">' + result.place_name + '</a></div>');
-                            });
-                        });
+            let mainCategoryEl = document.getElementById('id_main_category');
+            let event = {
+                id: '{{ original.id }}',
+                place_id: document.getElementById('id_place').value,
+                main_category_id: mainCategoryEl ? mainCategoryEl.value : '',
+                title: document.getElementById('id_title').value,
+                full_text: document.getElementById('id_full_text').value,
+                prepared_text: document.getElementById('id_prepared_text').value,
+                url: document.getElementById('id_url').value,
+                ticket_url: document.getElementById('id_ticket_url').value,
+                price: document.getElementById('id_price').value,
+                address: document.getElementById('id_address').value,
+                from_date: from_date,
+                to_date: to_date,
+            }
+            return event
+        }
+
+        function applyMakePostData(data) {
+            var fieldMap = {
+                'post':             'id_post',
+                'price_int':        'id_price_int',
+                'place_id':         'id_place',
+                'main_category_id': 'id_main_category',
+            };
+            for (var key in fieldMap) {
+                if (!data.hasOwnProperty(key) || data[key] === null) continue;
+                var el = document.getElementById(fieldMap[key]);
+                if (el) el.value = data[key];
+            }
+        }
+
+        function setAPIStatus(text, color) {
+            var s = document.getElementById('api-status');
+            if (!s) return;
+            s.textContent = text || '';
+            if (color) s.style.color = color; else s.style.color = '';
+        }
+
+        function setAPIDetail(obj) {
+            var wrap = document.getElementById('api-status-detail-wrap');
+            var pre = document.getElementById('api-status-detail');
+            if (!wrap || !pre) return;
+            if (!obj) {
+                wrap.style.display = 'none';
+                pre.textContent = '';
+                return;
+            }
+            wrap.style.display = 'block';
+            try {
+                pre.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+            } catch(e) {
+                pre.textContent = String(obj);
+            }
+        }
+
+
+        function remakePostAPI() {
+            var event_data = getEventValues();
+
+            var data = {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                api_url: 'api/events/make_post/',
+                method: 'POST',
+                data: event_data,
+            };
+
+            setAPIDetail(null);
+            setAPIStatus('Отправляю запрос к API...', '#333');
+            var btn = document.getElementById('btn-remake-api');
+            if (btn) btn.classList.add('disabled');
+
+            $.ajax({
+                url: channel_api_url,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(response) {
+                    if (response['status'] === 'success') {
+                        var resultData = response['result'];
+                        applyMakePostData(resultData);
+                        setAPIStatus('Готово: пост обновлён', 'green');
+                        setAPIDetail(resultData);
+                        let isReadyCheckbox = document.querySelector('input[name="is_ready"]');
+                        if (isReadyCheckbox) {
+                            isReadyCheckbox.checked = true;
+                        };
+                    } else {
+                        setAPIStatus('Ошибка API, выполняю локально...', 'red');
+                        setAPIDetail(response);
+                        remakePost();
+                    }
+                    if (btn) btn.classList.remove('disabled');
+                },
+                error: function(xhr, status, error) {
+                    setAPIStatus('Сервер недоступен, выполняю локально...', '#b36b00');
+                    setAPIDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
+                    if (btn) btn.classList.remove('disabled');
+                    remakePost();
+                }
+            });
+        }
+
+        function remakePostByAi() {
+            let event_data = getEventValues()
+
+            let data = {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                api_url: 'api/ai/update-event/',
+                method: 'POST',
+                data: {
+                    'is_new': 0,
+                    'event': event_data
+                },
+            };
+
+            setAPIDetail(null);
+            setAPIStatus('Отправляю запрос...', '#333');
+            var btn = document.getElementById('btn-new-ai');
+            if (btn) btn.classList.add('disabled');
+
+            $.ajax({
+                    url: channel_api_url,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+                        setAPIStatus('Запрос принят. Обработка...', '#333');
+                        let taskId = response['task_id']
+                        let rest_interval = 50000;
+                        let interval_sec = 5000;
+                        const interval = setInterval(async function() {
+
+                            let result = await taskStatus(taskId);
+                            if (result) {
+                                if(result['status']==='success') {
+                                    let data = result['result'];
+                                    applyResponseData(data);
+                                    setAPIStatus('Готово: обновлено успешно', 'green');
+                                    setAPIDetail(data);
+                                    clearInterval(interval);
+                                    if (btn) btn.classList.remove('disabled');
+                                } else if (result['status']==='error') {
+                                    setAPIStatus('Ошибка при обработке, выполняю локально...', 'red');
+                                    setAPIDetail(result['message'] || result);
+                                    clearInterval(interval);
+                                    if (btn) btn.classList.remove('disabled');
+                                    await cancelTask(taskId);
+                                    remakePostByAiLocal();
+                                }
+                            }
+                            rest_interval = rest_interval - interval_sec
+                            if(rest_interval<= 0) {
+                                setAPIStatus('Превышено время ожидания ответа от сервера, выполняю локально...', 'red');
+                                clearInterval(interval);
+                                if (btn) btn.classList.remove('disabled');
+                                await cancelTask(taskId);
+                                remakePostByAiLocal();
+                            }
+                        }, interval_sec);
+                    },
+                    error: function(xhr, status, error) {
+                        setAPIStatus('Сервер ChannelBot недоступен, выполняю локально...', '#b36b00');
+                        setAPIDetail(xhr && xhr.responseText ? xhr.responseText : String(error));
+                        remakePostByAiLocal();
+                        if (btn) btn.classList.remove('disabled');
                     }
                 });
 
-                $('#place-autocomplete-results').on('click', 'a', function (e) {
-                    e.preventDefault();
-                    var placeId = $(this).data('id');
-                    var placeName = $(this).text();
-                    $('.place-autocomplete').val(placeName);
-                    $('#id_place').val(placeId);
+        }
+
+        async function cancelTask(taskId) {
+            if (!taskId) return;
+            try {
+                await $.ajax({
+                    url: channel_api_url,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                        api_url: 'api/tasks/' + taskId + '/',
+                        method: 'DELETE',
+                    }),
+                });
+            } catch (e) {
+                console.warn('cancel task failed', e);
+            }
+        }
+
+        async function taskStatus(taskId) {
+            let data = {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                api_url: 'api/status/' + taskId,
+                method: 'GET',
+                data: {
+                    task_id: taskId
+                }
+            }
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: channel_api_url,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+                        resolve(response);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error(xhr.responseText);
+                        reject(error);
+                    }
+
                 });
             });
-        })(django.jQuery);
+        }
+
+
+        function return_initial_event() {
+            for (const key in initial_event) {
+                if (initial_event.hasOwnProperty(key)) {
+                    const element = document.getElementById(`id_${key}`);
+                    if (element) {
+                        element.value = initial_event[key];
+                    }
+                }
+            }
+        };
 
 
     </script>
@@ -153,33 +388,24 @@
 
 
 {% block object-tools %}
-    <ul class="object-tools">
-      <li>
-          <a href="#" onclick="remakePost()"  alt="It uses value of title, full_text, date_from, price, url">Remake post</a>
-      </li>
-      <li>
-          <a href="#" onclick="remakePostByAi()"  alt="It uses value of title, full_text, date_from, price, url">Remake post by GPT</a>
-      </li>
-      <li>
-          <a href="#" onclick="hideFullText()" id="hide_full_text">Show full text</a>
-      </li>
-
-        {% if change %}
-            {% if not is_popup %}
-                {% block object-tools-items %}
-                    {% change_form_object_tools %}
-                {% endblock %}
-            {% endif %}
-        {% endif %}
-
-    </ul>
 {% endblock %}
 
 <form {% if has_file_field %}enctype="multipart/form-data" {% endif %}{% if form_url %}action="{{ form_url }}" {% endif %}method="post" id="{{ opts.model_name }}_form" novalidate>{% csrf_token %}{% block form_top %}{% endblock %}
 <div>
 {% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
 {% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
-{% if save_on_top %}{% block submit_buttons_top %}{% submit_row %}{% endblock %}{% endif %}
+
+    {% if save_on_top %}
+        {% block submit_buttons_top %}
+            {% submit_row %}
+            <div style="margin-bottom: 10px; display: flex; gap: 10px;">
+                <a href="#" id="btn-remake-api" onclick="remakePostAPI()" class="button" alt="Remake post via external API (from form data)">Remake post API</a>
+                <a href="#" id="btn-new-ai" onclick="remakePostByAi()" class="button"  alt="It uses value of title, full_text, date_from, price, url">NEW Remake post by GPT</a>
+                <a href="#" onclick="hideFullText()" class="button" id="hide_full_text">Show full text</a>
+                <span id="api-status" style="margin-left:8px;"></span>
+            </div>
+        {% endblock %}
+    {% endif %}
 
 
 {% if errors %}
@@ -194,6 +420,20 @@
   {% include "admin/includes/fieldset.html" %}
 {% endfor %}
 {% endblock %}
+<p>
+<ul class="object-tools">
+    <li>
+        <a href="#" onclick="return_initial_event()"  alt="It uses value of title, full_text, date_from, price, url">Return initial Event Data</a>
+    </li>
+    {% if change %}
+        {% if not is_popup %}
+            {% block object-tools-items %}
+                {% change_form_object_tools %}
+            {% endblock %}
+        {% endif %}
+    {% endif %}
+</ul>
+</p>
 
 {% block after_field_sets %}{% endblock %}
 
@@ -221,18 +461,25 @@
 {% prepopulated_fields_js %}
 
 </div>
+<div id="api-status-detail-wrap" style="margin: 8px 0 0 0; display: none;">
+    <pre id="api-status-detail" style="max-height: 260px; overflow:auto; background:#f6f6f6; padding:8px; border:1px solid #ddd;"></pre>
+</div>
 </form></div>
     <script>
     document.getElementsByClassName('form-row field-full_text')[0].style.display = "none";
+    document.getElementsByClassName('form-row field-prepared_text')[0].style.display = "none";
 
     function hideFullText() {
             var fullText = document.getElementsByClassName('form-row field-full_text')[0];
+            var preparedText = document.getElementsByClassName('form-row field-prepared_text')[0];
             var button = document.getElementById('hide_full_text');
             if (fullText.style.display === "none") {
                 fullText.style.display = "block";
+                preparedText.style.display = "block";
                 button.innerHTML = 'Hide full text';
             } else {
                 fullText.style.display = "none";
+                preparedText.style.display = "none";
                 button.innerHTML = 'Show full text';
             }
         }

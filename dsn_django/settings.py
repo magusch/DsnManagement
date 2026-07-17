@@ -28,20 +28,53 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 debug_string = os.environ.get("DEBUG_BOOL", 'False')
 DEBUG = False if debug_string == "False" else True
 
-ALLOWED_HOSTS = ["*"]
+raw_allowed_hosts = os.environ.get("ALLOWED_HOSTS", "").strip()
+default_local_hosts = ["localhost", "127.0.0.1"]
 
+if raw_allowed_hosts:
+    ALLOWED_HOSTS = [host.strip() for host in raw_allowed_hosts.split(",") if host.strip()]
+    for local_host in default_local_hosts:
+        if local_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(local_host)
+else:
+    ALLOWED_HOSTS = ["*"]
 
+raw_csrf_trusted_origins = os.environ.get("CSRF_TRUSTED_ORIGINS", "").strip()
+if raw_csrf_trusted_origins:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in raw_csrf_trusted_origins.split(",") if origin.strip()]
+else:
+    # Auto-generate from ALLOWED_HOSTS when not explicitly provided
+    candidate_hosts = [h for h in ALLOWED_HOSTS if h != "*"]
+    for local_host in default_local_hosts:
+        if local_host not in candidate_hosts:
+            candidate_hosts.append(local_host)
+
+    CSRF_TRUSTED_ORIGINS = []
+    for host in candidate_hosts:
+        # Accept both http and https schemes
+        CSRF_TRUSTED_ORIGINS.append(f"http://{host}")
+        CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
+    # Common local dev port
+    CSRF_TRUSTED_ORIGINS.extend([
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
+    ])
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Application definition
 
 INSTALLED_APPS = [
     "events",
     "place",
+    "category",
+    "content_generator",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -56,6 +89,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "dsn_django.urls"
+
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 TEMPLATES = [
     {
@@ -114,15 +150,34 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
 STATIC_URL = "/static/"
-#STATIC_ROOT = "/dsn_django/static/"
-STATIC_ROOT = os.path.join(BASE_DIR, "static/")
+STATIC_ROOT = "/dsn_django/static/"
+#STATIC_ROOT = os.path.join(BASE_DIR, "static/")
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+
+
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL")
+AWS_S3_CUSTOM_DOMAIN = os.environ.get("AWS_S3_PUBLIC_URL")
+AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", 'us-east-1')
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+AWS_DEFAULT_ACL = 'public-read'
+AWS_S3_VERIFY = True
+
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+    'ContentDisposition': 'inline', # Чтобы браузер и ТГ открывали фото, а не качали
+}
+AWS_S3_CONTENT_TYPE_REWRITE = True
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # STATICFILES_DIRS = [
 #     os.path.join(BASE_DIR,'static')
 # ]
 
-STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+# STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 

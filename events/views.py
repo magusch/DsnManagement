@@ -3,7 +3,7 @@ import json
 import markdown
 
 from django.utils import timezone
-from django.http import HttpResponse  # TODO: delete
+from django.http import HttpResponse, JsonResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -15,6 +15,19 @@ from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post
 from . import utils
 
 from .helper.open_ai_helper import OpenAIHelper
+import threading
+from django.db import close_old_connections
+from types import SimpleNamespace
+
+
+def _run_in_background(target, *args, **kwargs):
+    def _wrapper():
+        try:
+            close_old_connections()
+            target(*args, **kwargs)
+        finally:
+            close_old_connections()
+    threading.Thread(target=_wrapper, daemon=True).start()
 
 
 def event_post_html(request, event_id):
@@ -22,6 +35,7 @@ def event_post_html(request, event_id):
     # image = f"<img src='{event.image}'>"
     # html = image + markdown.markdown(event.post)
     return HttpResponse(event.markdown_post_view_model())
+
 
 def all_events(request):
     all_events = Events2Post.objects.filter(status="Posted")
@@ -61,8 +75,10 @@ def count_events_by_day(request):
 
 @staff_member_required
 def move_approved_events(request):
-    utils.move_event_to_post(EventsNotApprovedNew)
-    utils.move_event_to_post(EventsNotApprovedProposed)
+    def _do_move():
+        utils.move_event_to_post(EventsNotApprovedNew)
+        utils.move_event_to_post(EventsNotApprovedProposed)
+    _run_in_background(_do_move)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -72,7 +88,7 @@ def move_approved_events(request):
 
 @staff_member_required
 def transfer_posted_events_to_site(request):
-    utils.move_event_to_site(Events2Post)
+    _run_in_background(utils.move_event_to_site, Events2Post)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -83,9 +99,11 @@ def transfer_posted_events_to_site(request):
 
 @staff_member_required
 def remove_old_events(request):
-    utils.delete_old_events(EventsNotApprovedNew)
-    utils.delete_old_events(EventsNotApprovedProposed)
-    utils.delete_old_events(Events2Post)
+    def _do_delete():
+        utils.delete_old_events(EventsNotApprovedNew)
+        utils.delete_old_events(EventsNotApprovedProposed)
+        utils.delete_old_events(Events2Post)
+    _run_in_background(_do_delete)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -97,18 +115,25 @@ def remove_old_events(request):
 @staff_member_required
 def fill_empty_post_time(request):
     if request.method == "POST":
-        print("")
         response = None
         #utils.refresh_posting_time(request=request)
 
     elif request.method == "GET":
-        queryset = (
+        # Collect IDs to avoid passing QuerySet across thread boundaries
+        event_ids = list(
             Events2Post.objects.filter(status="ReadyToPost")
             .order_by("queue")
-            .all()
+            .values_list("id", flat=True)
         )
 
-        utils.refresh_posting_time(None, request, queryset=queryset)
+        body_str = request.body.decode("utf-8", errors="ignore") if hasattr(request, "body") else ""
+
+        def _do_refresh(ids, body):
+            req = SimpleNamespace(body=body)
+            qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
+            utils.refresh_posting_time(None, req, queryset=qs)
+
+        _run_in_background(_do_refresh, event_ids, body_str)
 
         if 'HTTP_REFERER' in request.META:
             response = redirect(request.META['HTTP_REFERER'])
@@ -120,17 +145,29 @@ def fill_empty_post_time(request):
 
 @staff_member_required
 def update_all(request):
-    # move events to table Events2Post
-    move_approved_events(request)
+    def _do_update_all():
+        try:
+            utils.move_event_to_post(EventsNotApprovedNew)
+            utils.move_event_to_post(EventsNotApprovedProposed)
 
-    # If post_time is empty fill it with logic
-    fill_empty_post_time(request)
+            ids = list(
+                Events2Post.objects.filter(status="ReadyToPost")
+                .order_by("queue")
+                .values_list("id", flat=True)
+            )
+            req = SimpleNamespace(body="")
+            qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
+            utils.refresh_posting_time(None, req, queryset=qs)
 
-    # Sort by queue and put post_time in this order
-    utils.post_date_order_by_queue()
+            utils.post_date_order_by_queue()
+            utils.delete_old_events(EventsNotApprovedNew)
+            utils.delete_old_events(EventsNotApprovedProposed)
+            utils.delete_old_events(Events2Post)
+            utils.move_event_to_site(Events2Post)
+        finally:
+            pass
 
-    # Delete Old events from all tables
-    remove_old_events(request)
+    _run_in_background(_do_update_all)
 
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
@@ -245,7 +282,7 @@ def check_posts(request):
                     'event_id': event.event_id,
                     'title': event.title,
                     'errors': event.post_check(),
-                    'date_post': event.post_date.isoformat()
+                    'date_post': event.post_date.isoformat() if event.post_date else None
                 }
             )
 
@@ -253,7 +290,21 @@ def check_posts(request):
     return HttpResponse(answer)
 
 
-# views.py
+@csrf_exempt
+@staff_member_required
+def proxy_request_to_channel_api(request):
+    if request.method == "POST":
+
+        data = json.loads(request.body)
+        response, error = utils.channel_api_request(data)
+
+        if response:
+            return JsonResponse(response.json(), status=response.status_code)
+        else:
+            return JsonResponse({"error": error}, status=502)
+    else:
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
 
 from django.shortcuts import render, redirect
 from django.views import View
@@ -269,16 +320,45 @@ class EventAddView(View):
         return render(request, self.template_name, {'form': form})
 
     def post(self, request):
-        form = self.form_class(request.POST)
+        form = self.form_class(request.POST, request.FILES)
         today = timezone.now().date()
         events_today = EventsNotApprovedProposed.objects.filter(explored_date__date=today).count()
         if events_today >= 30:
             messages.error(request, 'Добавление мероприятий сегодня больше недоступно.')
             return redirect('add_event')
+
         if form.is_valid():
             event = form.save(commit=False)
             event.save()
             messages.success(request, 'Мероприятие успешно добавлено!')
+            return redirect('add_event')
+        return render(request, self.template_name, {'form': form})
+
+
+class EventAddViewHtmx(View):
+    form_class = EventAddForm
+    template_name = 'add_event_htmx.html'
+
+    def get(self, request):
+        form = self.form_class()
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request):
+        form = self.form_class(request.POST, request.FILES)
+        today = timezone.now().date()
+        events_today = EventsNotApprovedProposed.objects.filter(explored_date__date=today).count()
+        if events_today >= 30:
+            messages.error(request, 'Добавление мероприятий сегодня больше недоступно.')
+            return redirect('add_event')
+
+        if form.is_valid():
+            event = form.save(commit=False)
+            event.save()
+            messages.success(request, 'Мероприятие успешно добавлено!')
+            return JsonResponse({
+                'success': True,
+                'message': 'Мероприятие успешно добавлено json!'
+            })
             return redirect('add_event')
         return render(request, self.template_name, {'form': form})
 
