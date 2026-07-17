@@ -334,3 +334,31 @@ class EventAddView(View):
             return redirect('add_event')
         return render(request, self.template_name, {'form': form})
 
+
+class EventAddViewHtmx(View):
+    form_class = EventAddForm
+    template_name = 'add_event_htmx.html'
+
+    def get(self, request):
+        form = self.form_class()
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request):
+        form = self.form_class(request.POST, request.FILES)
+        today = timezone.now().date()
+        events_today = EventsNotApprovedProposed.objects.filter(explored_date__date=today).count()
+        if events_today >= 30:
+            messages.error(request, 'Добавление мероприятий сегодня больше недоступно.')
+            return redirect('add_event')
+
+        if form.is_valid():
+            event = form.save(commit=False)
+            event.save()
+            messages.success(request, 'Мероприятие успешно добавлено!')
+            return JsonResponse({
+                'success': True,
+                'message': 'Мероприятие успешно добавлено json!'
+            })
+            return redirect('add_event')
+        return render(request, self.template_name, {'form': form})
+

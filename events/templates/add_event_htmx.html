@@ -1,0 +1,56 @@
+<!-- add_event.html -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Добавить мероприятие</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://unpkg.com/htmx.org"></script>
+     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+{#   <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">#}
+
+
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row justify-content-center col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h2>Добавить мероприятие на модерирование</h2>
+            </div>
+
+            <div class="card-body">
+                {% if messages %}
+        <ul>
+            {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{#                <form method="post" enctype="multipart/form-data">#}
+{#                    {% csrf_token %}#}
+{#                    {{ form.as_p }}#}
+{#                    <button type="submit" class="btn btn-primary">Добавить мероприятие</button>#}
+{#                </form>#}
+            <div id="form-container">
+                <form
+                        method="post"
+                        hx-post="{% url 'add_event_htmx' %}"
+                        hx-target="#message-container"
+                        hx-swap="innerHTML">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                        <button type="submit" class="btn btn-primary">Добавить мероприятие</button>
+                    </form>
+            </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+    <script src="{% static 'admin/js/vendor/jquery/jquery.min.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

@@ -146,6 +146,11 @@ class PostHelper:
         )
 
         full_post = (full_title + post_text.strip() + footer).strip()
+
+        # Replace unicode emojis with custom Telegram emojis where mapping exists
+        # from category.emoji_manager import EmojiManager
+        # full_post = EmojiManager().replace_emojis(full_post)
+
         return full_post
 
     def address_markdown(self):

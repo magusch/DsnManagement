@@ -250,6 +250,7 @@ class Events2PostAdmin(admin.ModelAdmin):
     search_fields = ["title", "post", "address"]
     actions = [
         "prepare_events",
+        "update_post_text_for_posting",
         "change_queue",
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",

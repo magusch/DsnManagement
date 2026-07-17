@@ -14,6 +14,21 @@ class Category(models.Model):
         return self.name
 
 
+class EmojiMapping(models.Model):
+    emoji = models.CharField(max_length=10, unique=True, help_text="Unicode emoji, e.g. ☘️")
+    custom_emoji_id = models.CharField(
+        max_length=50, blank=True, null=True,
+        help_text="Telegram custom emoji ID"
+    )
+
+    class Meta:
+        verbose_name_plural = "emoji mappings"
+
+    def __str__(self):
+        status = self.custom_emoji_id or "no custom"
+        return f"{self.emoji} → {status}"
+
+
 class SubCategory(models.Model):
     name = models.CharField(max_length=250, unique=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
