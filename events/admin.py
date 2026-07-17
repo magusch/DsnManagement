@@ -254,6 +254,7 @@ class Events2PostAdmin(admin.ModelAdmin):
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
         "change_status_to_OnlyApi",
+        "mark_as_duplicate",
         'transfer_events_to_site',
         utils.post_date_order_by_queue,
         'text_post_check',
@@ -284,8 +285,8 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     form = Events2PostAdminForm
 
-    DEFAULT_HIDDEN_STATUSES = ['Posted', 'Spam', 'OnlyApi', 'Expired']
-    UPCOMING_STATUSES = ['ReadyToPost', 'OnlyApi', 'Posted']
+    DEFAULT_HIDDEN_STATUSES = ['Posted', 'Spam', 'OnlyApi', 'Expired', 'Duplicate']
+    UPCOMING_STATUSES = ['ReadyToPost', 'OnlyApi', 'Posted', 'Duplicate']
 
     def get_changelist(self, request, **kwargs):
         return Events2PostChangeList
@@ -354,7 +355,7 @@ class Events2PostAdmin(admin.ModelAdmin):
                 .order_by())
         counts = {row['status']: row['n'] for row in rows}
         ordered_keys = ['ReadyToPost', 'ForFuture', 'Scrape', 'Error', 'Rejected',
-                        'OnlyApi', 'Posted', 'Spam', 'Expired']
+                        'OnlyApi', 'Posted', 'Spam', 'Expired', 'Duplicate']
         result = [(key, counts.get(key, 0), status_color.get(key, 'gray'))
                   for key in ordered_keys if counts.get(key, 0) > 0]
         cache.set(cache_key, result, self.SUMMARY_CACHE_TTL)
@@ -437,7 +438,8 @@ class Events2PostAdmin(admin.ModelAdmin):
             When(status='Rejected', then=Value(6)),
             When(status='Expired', then=Value(7)),
             When(status='Spam', then=Value(8)),
-            default=Value(9),
+            When(status='Duplicate', then=Value(9)),
+            default=Value(10),
             output_field=IntegerField(),
         )
         return [status_order, "queue"]
@@ -481,6 +483,20 @@ class Events2PostAdmin(admin.ModelAdmin):
             % updated,
             messages.SUCCESS,
         )
+
+    def mark_as_duplicate(self, request, queryset):
+        updated = queryset.update(status="Duplicate")
+        self.message_user(
+            request,
+            ngettext(
+                "%d event was marked as Duplicate.",
+                "%d events were marked as Duplicate.",
+                updated,
+            )
+            % updated,
+            messages.SUCCESS,
+        )
+    mark_as_duplicate.short_description = "Mark as Duplicate"
 
     utils.post_date_order_by_queue.acts_on_all = True
 

@@ -230,7 +230,7 @@ class EventsNotApprovedProposed(models.Model):
 
 
 status_color = {"ReadyToPost": "green", "Posted": "red", "ForFuture": 'blue', "Spam": "red", "Scrape": "purple",
-                "Error": "orange", "Rejected": "red", "Expired": "gray", "OnlyApi": "purple"}
+                "Error": "orange", "Rejected": "red", "Expired": "gray", "OnlyApi": "purple", "Duplicate": "gray"}
 
 
 def last_queue():
@@ -256,7 +256,8 @@ class Events2Post(models.Model):  # Table events for posting
     status = models.CharField(
         max_length=15,
         choices=(("ReadyToPost", "Ready To Post"), ("Posted", "Posted"), ("ForFuture", "For Future"), ("OnlyApi", "OnlyApi"),
-                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected"), ("Expired", "Expired"),),
+                 ("Spam", "Spam"), ("Scrape", "Scrape It"), ("Error", "Error"), ("Rejected", "Rejected"), ("Expired", "Expired"),
+                 ("Duplicate", "Duplicate"),),
         default="ReadyToPost",
         db_index=True
     )
@@ -337,7 +338,7 @@ class Events2Post(models.Model):  # Table events for posting
         #from_date_color_html = ""
         if self.status == 'Error':
             from_date_color_html = f'<span style="color: Red;">{self.from_date.ctime()}</span>'
-        elif self.status == 'Rejected':
+        elif self.status == 'Rejected' or self.status == 'Duplicate':
             from_date_color_html = f'<span style="color: Gray;">{self.from_date.ctime()}</span>'
         elif self.status == 'ForFuture':
             from_date_color_html = f'<span style="color: Blue;">{self.from_date.ctime()}</span>'
