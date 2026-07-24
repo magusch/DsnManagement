@@ -18,6 +18,24 @@ class Place(models.Model):
         max_length=500, blank=True,
         help_text="Категория, которая присваивается всем мероприятиям этой площадки",
     )
+    main_place = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='children',
+        help_text="Родительский комплекс/хаб. Пусто = самостоятельная площадка (верхний уровень).",
+    )
+    district = models.ForeignKey(
+        'District', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='places',
+        help_text="Район (источник истины). Резолвится из district_raw через DistrictKeyword.",
+    )
+    district_raw = models.CharField(
+        max_length=500, blank=True,
+        help_text="Район как пришёл из источника. Вспомогательный сигнал для привязки к district.",
+    )
+
+    def clean(self):
+        if self.main_place_id and self.main_place_id == self.id:
+            raise ValidationError("Площадка не может быть собственным родителем (main_place).")
 
     def markdown_address(self, with_url=True):
         name = escape_v2(self.place_name)
@@ -152,6 +170,41 @@ class PlaceKeyword(models.Model):
 
     def __str__(self):
         return (f"{self.place_keyword}, {self.place.place_address}")
+
+
+class District(models.Model):
+    name = models.CharField(max_length=200)
+    place_city = models.CharField(
+        max_length=500, default='SPb', blank=True,
+    )
+    parent = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='children',
+        help_text="Вышестоящий район/округ/область. Пусто = верхний уровень.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "place_city"],
+                name="unique_district_name_city",
+            )
+        ]
+
+    def clean(self):
+        if self.parent_id and self.parent_id == self.id:
+            raise ValidationError("Район не может быть собственным родителем (parent).")
+
+    def __str__(self):
+        return f"{self.name} ({self.place_city})"
+
+
+class DistrictKeyword(models.Model):
+    district = models.ForeignKey(District, on_delete=models.CASCADE, related_name="keywords")
+    district_keyword = models.CharField(max_length=200)
+
+    def __str__(self):
+        return f"{self.district_keyword} → {self.district.name}"
 
 
 class TestEventPlace(models.Model):
