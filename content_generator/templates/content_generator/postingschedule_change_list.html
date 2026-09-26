@@ -62,6 +62,9 @@
 {% endblock %}
 
 {% block object-tools %}
+    <div style="margin: 6px 0;">
+        {% include "events/partials/fill_posting_time_button.html" with kind="digest" field="scheduled_time" label="Расставить время дайджестов" %}
+    </div>
     {% if slot_summary %}
         <div class="dsn-slot-chips">
             {% for chip in slot_summary %}

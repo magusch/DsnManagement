@@ -414,20 +414,25 @@ weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 class PostingTime(models.Model):
+    KIND_EVENT = "event"
+    KIND_DIGEST = "digest"
+    KIND_INACTIVE = "inactive"
+    KIND_CHOICES = [
+        (KIND_EVENT, "Мероприятие"),
+        (KIND_DIGEST, "Дайджест"),
+        (KIND_INACTIVE, "Выключен"),
+    ]
+
     start_weekday = models.IntegerField(default=4)
     end_weekday = models.IntegerField(default=6)
-    posting_time_hours = models.IntegerField(default=13)
-    posting_time_minutes = models.IntegerField(default=20)
-    posting_time = models.TimeField(null=True)
+    posting_time = models.TimeField()
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_EVENT)
 
     def __str__(self):
+        time = self.posting_time.strftime("%H:%M")
         if (0 <= self.start_weekday < 7) & (0 <= self.end_weekday < 7):
-            posting = (
-                f"{weekdays[self.start_weekday]}-{weekdays[self.end_weekday]} "
-                f"{self.posting_time_hours}:{self.posting_time_minutes:02}"
-            )
-            return posting
-        return f"{self.posting_time_hours}:{self.posting_time_minutes}"
+            return f"{weekdays[self.start_weekday]}-{weekdays[self.end_weekday]} {time} ({self.kind})"
+        return f"{time} ({self.kind})"
 
 
 class Parameter(models.Model):  # Table events for posting

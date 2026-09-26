@@ -659,9 +659,9 @@ weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 class PostingTimesAdmin(admin.ModelAdmin):
 
-    list_filter = ["start_weekday"]
-    ordering = ["start_weekday", "posting_time_hours"]
-    list_editable = ["posting_time",]
+    list_filter = ["kind", "start_weekday"]
+    ordering = ["start_weekday", "posting_time"]
+    list_editable = ["posting_time", "kind"]
 
     def weekdays(self):
         if (0 <= self.start_weekday < 7) & (0 <= self.end_weekday < 7):
@@ -669,10 +669,7 @@ class PostingTimesAdmin(admin.ModelAdmin):
         if self.start_weekday < 0:  # we can add special postingtime for special date
             return f"day – {self.start_weekday*-1}"
 
-    def timepost(self):
-        return f"{self.posting_time_hours}:{self.posting_time_minutes:02}"
-
-    list_display = [weekdays, timepost, "posting_time", ]
+    list_display = ["id", weekdays, "posting_time", "kind"]
 
 
 class ParametersAdmin(admin.ModelAdmin):

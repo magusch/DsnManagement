@@ -98,7 +98,7 @@
 
 {% block object-tools %}
     <div class="dsn-toolbar">
-        <a class="button" href="{% url 'fill_empty_post_time' %}">Fill posting time</a>
+        {% include "events/partials/fill_posting_time_button.html" with kind="event" field="post_date" %}
 {#        <a class="button" href="{% url 'count_events_by_day' %}">Count events by day</a>#}
         <a class="button" href="{{ show_all_url }}">All Events ({{ date_counts.all }})</a>
         <a class="button" href="{{ show_upcoming_url }}">Будущие ({{ date_counts.upcoming }})</a>

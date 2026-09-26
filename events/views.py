@@ -2,7 +2,7 @@ import json
 
 import markdown
 
-from django.utils import timezone
+from django.utils import formats, timezone
 from django.http import HttpResponse, JsonResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import redirect, get_object_or_404
@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.template import loader
 from django.contrib import messages
 
-from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, Parameter, Event
+from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, Parameter, Event, PostingTime
 
 from . import utils
 
@@ -111,36 +111,62 @@ def remove_old_events(request):
     return response
 
 
+def _refresh_event_posting_time(ids, body=""):
+    req = SimpleNamespace(body=body)
+    qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
+    return utils.refresh_posting_time(None, req, queryset=qs)
+
+
+def _fill_posting_time(kind, body=""):
+    """Returns [(pk, aware datetime)] of the rows that got a new time."""
+    if kind == PostingTime.KIND_DIGEST:
+        from content_generator.utils import refresh_digest_posting_time
+
+        return [(s.pk, s.scheduled_time) for s in refresh_digest_posting_time()]
+
+    event_ids = list(
+        Events2Post.objects.filter(status="ReadyToPost")
+        .order_by("queue")
+        .values_list("id", flat=True)
+    )
+    return [(e.pk, e.post_date) for e in _refresh_event_posting_time(event_ids, body)]
+
+
 @csrf_exempt
 @staff_member_required
 def fill_empty_post_time(request):
-    if request.method == "POST":
-        response = None
-        #utils.refresh_posting_time(request=request)
+    """Lay out the queue over PostingTime slots.
 
-    elif request.method == "GET":
-        # Collect IDs to avoid passing QuerySet across thread boundaries
-        event_ids = list(
-            Events2Post.objects.filter(status="ReadyToPost")
-            .order_by("queue")
-            .values_list("id", flat=True)
-        )
+    ?kind=event (default) — Events2Post.post_date over `event` slots;
+    ?kind=digest — content_generator PostingSchedule over `digest` slots.
+    """
+    kind = request.GET.get("kind") or request.POST.get("kind") or PostingTime.KIND_EVENT
+    if kind not in (PostingTime.KIND_EVENT, PostingTime.KIND_DIGEST):
+        return JsonResponse({"error": f"Unknown kind: {kind}"}, status=400)
 
-        body_str = request.body.decode("utf-8", errors="ignore") if hasattr(request, "body") else ""
+    body_str = request.body.decode("utf-8", errors="ignore") if request.method == "GET" else ""
 
-        def _do_refresh(ids, body):
-            req = SimpleNamespace(body=body)
-            qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
-            utils.refresh_posting_time(None, req, queryset=qs)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        updated = _fill_posting_time(kind, body_str)
+        return JsonResponse({
+            "kind": kind,
+            "count": len(updated),
+            "updated": [
+                {
+                    "id": pk,
+                    # exactly what the admin split-datetime inputs render
+                    "date": formats.localize_input(timezone.localtime(dt).date()),
+                    "time": formats.localize_input(timezone.localtime(dt).time()),
+                }
+                for pk, dt in updated
+            ],
+        })
 
-        _run_in_background(_do_refresh, event_ids, body_str)
+    _run_in_background(_fill_posting_time, kind, body_str)
 
-        if 'HTTP_REFERER' in request.META:
-            response = redirect(request.META['HTTP_REFERER'])
-        else:
-            response = HttpResponse('Ok')
-
-    return response
+    if 'HTTP_REFERER' in request.META:
+        return redirect(request.META['HTTP_REFERER'])
+    return HttpResponse('Ok')
 
 
 @staff_member_required
@@ -155,9 +181,7 @@ def update_all(request):
                 .order_by("queue")
                 .values_list("id", flat=True)
             )
-            req = SimpleNamespace(body="")
-            qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
-            utils.refresh_posting_time(None, req, queryset=qs)
+            _refresh_event_posting_time(ids)
 
             utils.post_date_order_by_queue()
             utils.delete_old_events(EventsNotApprovedNew)
