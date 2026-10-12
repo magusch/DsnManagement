@@ -112,6 +112,11 @@ TEMPLATES = [
 WSGI_APPLICATION = "dsn_django.wsgi.application"
 
 DATABASES = {"default": connection_url.config(DATABASE_URL)}
+DATABASES["default"].update(
+    CONN_MAX_AGE=60,  # reuse connections between requests (new connection costs ~2s to remote DB)
+    CONN_HEALTH_CHECKS=True,  # drop a stale reused connection instead of failing the request
+    DISABLE_SERVER_SIDE_CURSORS=True,  # one round trip per query; required behind PgBouncer
+)
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
@@ -140,8 +145,6 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Europe/Moscow"
 
 USE_I18N = True
-
-USE_L10N = True
 
 USE_TZ = True
 
@@ -173,7 +176,10 @@ AWS_S3_OBJECT_PARAMETERS = {
     'ContentDisposition': 'inline', # Чтобы браузер и ТГ открывали фото, а не качали
 }
 AWS_S3_CONTENT_TYPE_REWRITE = True
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 # STATICFILES_DIRS = [
 #     os.path.join(BASE_DIR,'static')

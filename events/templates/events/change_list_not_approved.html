@@ -4,13 +4,13 @@
 {% block extrahead %}
     {{ block.super }}
     <style>
-        #result_list thead th { position: sticky; top: 0; background: #fff; z-index: 2; }
+        #result_list thead th { position: sticky; top: 0; background: var(--body-bg); z-index: 2; }
         #result_list input.action-select, #action-toggle { transform: scale(1.15); cursor: pointer; }
-        #changelist-form .actions { position: sticky; top: 38px; background: #fff; z-index: 3; padding-top: 6px; padding-bottom: 6px; }
+        #changelist-form .actions { position: sticky; top: 38px; background: var(--body-bg); z-index: 3; padding-top: 6px; padding-bottom: 6px; }
         #result_list tbody tr { transition: background-color 0.15s; cursor: pointer; }
-        #result_list tbody tr:hover { background-color: #f0f4f8; }
-        #result_list tbody tr.selected-row { background-color: #fffde7; }
-        #result_list tbody tr.selected-row:hover { background-color: #fff9c4; }
+        #result_list tbody tr:hover { background-color: var(--dsn-row-hover); }
+        #result_list tbody tr.selected-row { background-color: var(--dsn-row-selected); }
+        #result_list tbody tr.selected-row:hover { background-color: var(--dsn-row-selected-hover); }
         #changelist-form .actions { display: flex; align-items: center; flex-wrap: wrap; }
         .bulk-select-tools { display: inline-flex; gap: 4px; margin-left: auto; }
     </style>
@@ -155,6 +155,7 @@
             <a class="button" id="tripster" onclick="addItem('tripster')">tripster event</a>
             <a class="button" id="tg" onclick="addItem('tg')">tg post</a>
             <a class="button" id="cfg" onclick="addItem('cfg')">sites events</a>
+            <a class="button" id="vibe" onclick="addItem('vibe')">vibe events</a>
         </div>
     </div>
 {% endblock %}

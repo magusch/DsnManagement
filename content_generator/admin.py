@@ -5,6 +5,7 @@ from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
+from events.helper.colors import css_color
 from .models import FilterSet, EventSelection, PostTemplate, GeneratedPost, PostingSchedule
 from .services import FilterService
 from django.utils.translation import ngettext
@@ -183,7 +184,7 @@ class PostingScheduleAdmin(admin.ModelAdmin):
             'key': key,
             'label': label,
             'count': count,
-            'color': color,
+            'color': css_color(color),
             'active': key == active,
             'url': base_url if key == 'all' else f'{base_url}?{SlotFilter.parameter_name}={key}',
         } for key, label, count, color in rows]
@@ -223,7 +224,7 @@ class PostingScheduleAdmin(admin.ModelAdmin):
         """Whether the slot is still going to fire — a missed one is silent otherwise."""
         if obj.is_posted or obj.status == 'Posted':
             posted = timezone.localtime(obj.posted_at).strftime('%d.%m %H:%M') if obj.posted_at else ''
-            return format_html('<span style="color:#2f7d32;">опубликован</span>{}',
+            return format_html('<span style="color:{};">опубликован</span>{}', css_color('#2f7d32'),
                                format_html('<div class="dsn-slot-note">{}</div>', posted) if posted else '')
         if obj.scheduled_time is None:
             return '—'
@@ -232,14 +233,14 @@ class PostingScheduleAdmin(admin.ModelAdmin):
 
         left = obj.scheduled_time - timezone.now()
         if -PUBLISH_GRACE <= left <= timedelta(0):
-            return format_html('<span style="color:#b36b00;">публикуется</span>')
+            return format_html('<span style="color:{};">публикуется</span>', css_color('#b36b00'))
         if left < -PUBLISH_GRACE:
             return format_html(
-                '<span style="color:#ba2121;" title="Слот пропущен, пост не будет '
+                '<span style="color:{};" title="Слот пропущен, пост не будет '
                 'опубликован — поставьте новое время">просрочен на {}</span>',
-                _human_delta(left),
+                css_color('#ba2121'), _human_delta(left),
             )
-        return format_html('<span style="color:#555;">через {}</span>', _human_delta(left))
+        return format_html('<span style="color:{};">через {}</span>', css_color('#555'), _human_delta(left))
 
     @admin.display(description='Пост в канале')
     def post_preview(self, obj):

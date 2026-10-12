@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from .models import (
     Place, PlaceKeyword, TestEventPlace, PlaceSchedule,
     District, DistrictKeyword,
@@ -115,7 +116,7 @@ class PlaceKeywordAdmin(admin.ModelAdmin):
         js = ('admin_place_searching.js',)
 
     def place_searching(self, obj):
-        return format_html('<input type="text" class="place-autocomplete" /></input>'
+        return mark_safe('<input type="text" class="place-autocomplete" /></input>'
                            '<div id="place-autocomplete-results" class="form-row"></div>')
 
 

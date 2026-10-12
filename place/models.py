@@ -145,7 +145,7 @@ class PlaceSchedule(models.Model):
                 name="unique_schedule"
             ),
             models.CheckConstraint(
-                check=(
+                condition=(
                         (models.Q(schedule_type="std") & models.Q(date__isnull=True) & models.Q(
                             weekday__isnull=False)) |
                         (models.Q(schedule_type="spl") & models.Q(date__isnull=False) & models.Q(

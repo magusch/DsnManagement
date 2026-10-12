@@ -4,16 +4,16 @@
     {{ block.super }}
     <style>
         /* Sticky header for results table */
-        #result_list thead th { position: sticky; top: 0; background: #fff; z-index: 2; }
+        #result_list thead th { position: sticky; top: 0; background: var(--body-bg); z-index: 2; }
         /* Larger, easier checkboxes */
         #result_list input.action-select, #action-toggle { transform: scale(1.15); cursor: pointer; }
         /* Sticky action bar at top */
-        #changelist-form .actions { position: sticky; top: 38px; background: #fff; z-index: 3; padding-top: 6px; padding-bottom: 6px; }
+        #changelist-form .actions { position: sticky; top: 38px; background: var(--body-bg); z-index: 3; padding-top: 6px; padding-bottom: 6px; }
         /* Row interactions */
         #result_list tbody tr { transition: background-color 0.15s; cursor: pointer; }
-        #result_list tbody tr:hover { background-color: #f0f4f8; }
-        #result_list tbody tr.selected-row { background-color: #fffde7; }
-        #result_list tbody tr.selected-row:hover { background-color: #fff9c4; }
+        #result_list tbody tr:hover { background-color: var(--dsn-row-hover); }
+        #result_list tbody tr.selected-row { background-color: var(--dsn-row-selected); }
+        #result_list tbody tr.selected-row:hover { background-color: var(--dsn-row-selected-hover); }
         #changelist-form .actions { display: flex; align-items: center; flex-wrap: wrap; }
         .bulk-select-tools { display: inline-flex; gap: 4px; margin-left: auto; }
     </style>
@@ -123,15 +123,15 @@
     {% endif %}
     <style>
         .dsn-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
-        .dsn-status-summary { margin: 6px 0 4px; font-size: 12px; color: #555; }
-        .dsn-status-summary-label { color: #888; margin-right: 4px; }
+        .dsn-status-summary { margin: 6px 0 4px; font-size: 12px; color: var(--dsn-text-quiet); }
+        .dsn-status-summary-label { color: var(--dsn-text-quieter); margin-right: 4px; }
         .dsn-status-chip { white-space: nowrap; }
         .dsn-category-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-        .dsn-cat-chip { display: inline-block; padding: 2px 8px; border: 1px solid #c8d1d9; border-radius: 12px;
-                        background: #f4f6f8; color: #2c3e50; font-size: 12px; text-decoration: none; white-space: nowrap; }
-        .dsn-cat-chip:hover { background: #e3e8ee; }
-        .dsn-cat-chip-active { background: #2c3e50; color: #fff; border-color: #2c3e50; }
-        .dsn-cat-chip-active:hover { background: #1a252f; color: #fff; }
+        .dsn-cat-chip { display: inline-block; padding: 2px 8px; border: 1px solid var(--dsn-chip-border); border-radius: 12px;
+                        background: var(--dsn-chip-bg); color: var(--dsn-chip-fg); font-size: 12px; text-decoration: none; white-space: nowrap; }
+        .dsn-cat-chip:hover { background: var(--dsn-chip-hover-bg); }
+        .dsn-cat-chip-active { background: var(--dsn-chip-active-bg); color: #fff; border-color: var(--dsn-chip-active-bg); }
+        .dsn-cat-chip-active:hover { background: var(--dsn-chip-active-hover-bg); color: #fff; }
         .dsn-cat-chip b { font-weight: 600; opacity: 0.75; margin-left: 2px; }
     </style>
     <br/>

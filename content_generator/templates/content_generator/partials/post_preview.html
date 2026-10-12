@@ -7,7 +7,7 @@
         {% elif method == "ai" %}
             <span class="info-badge info">ИИ</span>
         {% endif %}
-        <span style="font-size:13px; color:#666; margin-left:8px;">
+        <span style="font-size:13px; color:var(--dsn-text-muted); margin-left:8px;">
             Использовано {{ used_count }} из {{ total_count }} мероприятий
         </span>
         {% if truncated %}
@@ -17,7 +17,7 @@
 
     <div style="margin-bottom: 10px;">
         <label for="post-title-input" style="font-weight:bold; font-size:13px;">Заголовок поста:</label>
-        <input type="text" id="post-title-input" style="width:100%; padding:6px 10px; border:1px solid #ccc; border-radius:4px;" placeholder="Подборка мероприятий">
+        <input type="text" id="post-title-input" style="width:100%; padding:6px 10px; border:1px solid var(--dsn-input-border); border-radius:4px;" placeholder="Подборка мероприятий">
     </div>
 
     <textarea id="post-content-edit">{{ content }}</textarea>

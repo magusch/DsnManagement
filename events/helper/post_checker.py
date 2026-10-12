@@ -8,8 +8,8 @@ _URL_RE = re.compile(r'https?://\S+')
 # Any escaped character \X (MarkdownV2 escapes all special chars)
 _ESCAPED_RE = re.compile(r'\\.')
 
-CRITICAL_ICON = '<span style="color:red" title="{title}">{symbol}</span>'
-WARNING_ICON = '<span style="color:orange" title="{title}">{symbol}</span>'
+CRITICAL_ICON = '<span style="color:var(--dsn-c-red, red)" title="{title}">{symbol}</span>'
+WARNING_ICON = '<span style="color:var(--dsn-c-orange, orange)" title="{title}">{symbol}</span>'
 
 
 def _strip_non_markdown(text):

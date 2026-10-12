@@ -9,7 +9,7 @@ services:
         DEBUG: 'false'
        volumes:
          - web-static:/dsn_django/static/
-       command: gunicorn --bind :8000 --workers 3 dsn_django.wsgi:application
+       command: sh -c "python manage.py collectstatic --noinput && gunicorn --bind :8000 --workers 3 dsn_django.wsgi:application"
        networks:
          - django-network
          - dsn_network

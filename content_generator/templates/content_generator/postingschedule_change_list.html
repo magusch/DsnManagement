@@ -6,18 +6,18 @@
     <style>
         /* Toolbar counters — same idea as the Events2Post status chips */
         .dsn-slot-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-        .dsn-slot-chip { display: inline-block; padding: 2px 10px; border: 1px solid #c8d1d9;
-                         border-radius: 12px; background: #f4f6f8; font-size: 12px;
+        .dsn-slot-chip { display: inline-block; padding: 2px 10px; border: 1px solid var(--dsn-chip-border);
+                         border-radius: 12px; background: var(--dsn-chip-bg); font-size: 12px;
                          text-decoration: none; white-space: nowrap; }
-        .dsn-slot-chip:hover { background: #e3e8ee; }
+        .dsn-slot-chip:hover { background: var(--dsn-chip-hover-bg); }
         .dsn-slot-chip b { font-weight: 600; margin-left: 3px; }
-        .dsn-slot-chip-active { background: #2c3e50; color: #fff !important; border-color: #2c3e50; }
-        .dsn-slot-note { font-size: 11px; color: #888; margin-top: 2px; }
+        .dsn-slot-chip-active { background: var(--dsn-chip-active-bg); color: #fff !important; border-color: var(--dsn-chip-active-bg); }
+        .dsn-slot-note { font-size: 11px; color: var(--dsn-text-quieter); margin-top: 2px; }
 
         /* Table: readable rows, header stays put while scrolling a long schedule */
-        #result_list thead th { position: sticky; top: 0; background: #fff; z-index: 2; }
+        #result_list thead th { position: sticky; top: 0; background: var(--body-bg); z-index: 2; }
         #result_list td, #result_list th { vertical-align: top; }
-        #result_list tbody tr:hover { background-color: #f0f4f8; }
+        #result_list tbody tr:hover { background-color: var(--dsn-row-hover); }
         #result_list td.field-post_link { min-width: 180px; }
         #result_list td.field-theme, #result_list td.field-slot_state { white-space: nowrap; }
         #result_list td.field-events_count { text-align: center; }
@@ -35,7 +35,7 @@
         #result_list td.field-post_preview .tg-post-cell.expanded .tg-post-card .tg-post-image {
             display: block;
         }
-        .tg-post-toggle { display: inline-block; margin-top: 4px; font-size: 11px; color: #417690;
+        .tg-post-toggle { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--dsn-accent);
                           background: none; border: none; padding: 0; cursor: pointer; }
         .tg-post-toggle:hover { text-decoration: underline; }
     </style>
