@@ -133,11 +133,18 @@ class PlaceScheduleConstraintTests(SimpleTestCase):
 class SummaryCacheTests(SimpleTestCase):
     """Sidebar counters are cached and dropped when an Events2Post changes."""
 
+    CITIES = ("spb", "kzn", "all")
+
     def setUp(self):
         cache.clear()
+        patcher = mock.patch("city.models.get_cities", return_value=dict.fromkeys(self.CITIES))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def summary_keys(self):
-        return [SUMMARY_CACHE_KEY] + [CATEGORY_SUMMARY_CACHE_KEY.format(scope=s) for s in CATEGORY_SUMMARY_SCOPES]
+        return ([SUMMARY_CACHE_KEY.format(city=c) for c in self.CITIES]
+                + [CATEGORY_SUMMARY_CACHE_KEY.format(scope=s, city=c)
+                   for s in CATEGORY_SUMMARY_SCOPES for c in self.CITIES])
 
     def test_invalidate_drops_all_summary_keys(self):
         for key in self.summary_keys():
@@ -146,9 +153,10 @@ class SummaryCacheTests(SimpleTestCase):
         self.assertEqual([k for k in self.summary_keys() if cache.get(k) is not None], [])
 
     def test_save_signal_invalidates(self):
-        cache.set(SUMMARY_CACHE_KEY, "x")
+        key = SUMMARY_CACHE_KEY.format(city="kzn")
+        cache.set(key, "x")
         post_save.send(sender=Events2Post, instance=Events2Post(queue=1), created=False)
-        self.assertIsNone(cache.get(SUMMARY_CACHE_KEY))
+        self.assertIsNone(cache.get(key))
 
     def test_unknown_show_value_uses_default_scope(self):
         model_admin = admin.site._registry[Events2Post]
@@ -158,4 +166,4 @@ class SummaryCacheTests(SimpleTestCase):
             with mock.patch.object(model_admin, "_base_queryset_for_date_filter") as qs:
                 qs.return_value.filter.return_value.values.return_value.annotate.return_value.order_by.return_value = []
                 model_admin._get_category_summary(request)
-            self.assertEqual(cache.get(CATEGORY_SUMMARY_CACHE_KEY.format(scope=scope)), [])
+            self.assertEqual(cache.get(CATEGORY_SUMMARY_CACHE_KEY.format(scope=scope, city="spb")), [])

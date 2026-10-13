@@ -8,16 +8,19 @@ from django.db.models import Q, Case, When, Value, IntegerField
 from django.db.models.signals import post_save, post_delete
 
 
-SUMMARY_CACHE_KEY = 'events2post:summary'
-CATEGORY_SUMMARY_CACHE_KEY = 'events2post:category_summary:{scope}'
+SUMMARY_CACHE_KEY = 'events2post:summary:{city}'
+CATEGORY_SUMMARY_CACHE_KEY = 'events2post:category_summary:{scope}:{city}'
 CATEGORY_SUMMARY_SCOPES = ('upcoming', 'past', 'all', 'default')
 
 
 def invalidate_events2post_summary(**kwargs):
     from django.core.cache import cache
+    from city.models import get_cities
 
-    cache.delete_many([SUMMARY_CACHE_KEY] +
-                      [CATEGORY_SUMMARY_CACHE_KEY.format(scope=s) for s in CATEGORY_SUMMARY_SCOPES])
+    cities = list(get_cities())  # includes 'all'
+    cache.delete_many([SUMMARY_CACHE_KEY.format(city=c) for c in cities] +
+                      [CATEGORY_SUMMARY_CACHE_KEY.format(scope=s, city=c)
+                       for s in CATEGORY_SUMMARY_SCOPES for c in cities])
 
 
 class Events2PostChangeList(ChangeList):
@@ -38,6 +41,7 @@ post_delete.connect(invalidate_events2post_summary, sender=Events2Post, dispatch
 
 from . import utils
 from django import forms
+from city.admin_mixins import CityScopedAdmin
 from .widgets import PlaceAutocompleteWidget
 from .helper.colors import css_color
 
@@ -152,7 +156,7 @@ class SourceFilter(admin.SimpleListFilter):
             return queryset.exclude(q_objects)
 
 
-class EventsAdmin(admin.ModelAdmin):
+class EventsAdmin(CityScopedAdmin, admin.ModelAdmin):
     change_list_template = "events/change_list_not_approved.html"
 
     list_display = ["title", "status_color_display", "from_date_order", open_url, "score"]
@@ -272,7 +276,7 @@ class Events2PostAdminForm(forms.ModelForm):
         fields = '__all__'
 
 
-class Events2PostAdmin(admin.ModelAdmin):
+class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
     change_list_template = "events/change_list_approved.html"
     change_form_template = "events/change_form.html"
 
@@ -302,7 +306,7 @@ class Events2PostAdmin(admin.ModelAdmin):
         "change_status_to_OnlyApi",
         "mark_as_duplicate",
         'transfer_events_to_site',
-        utils.post_date_order_by_queue,
+        'post_date_order_by_queue',
         'text_post_check',
         'upload_image_s3'
     ]
@@ -376,7 +380,7 @@ class Events2PostAdmin(admin.ModelAdmin):
         extra_context['filter_ready_to_post_url'] = self._build_url(request, {'status__exact': 'ReadyToPost'})
         extra_context['show_upcoming_url'] = self._build_url(request, {'show': 'upcoming'}, drop=['all'])
         extra_context['show_past_url'] = self._build_url(request, {'show': 'past'}, drop=['all'])
-        extra_context['status_summary'], extra_context['date_counts'] = self._get_summary()
+        extra_context['status_summary'], extra_context['date_counts'] = self._get_summary(request)
         extra_context['category_summary'] = self._get_category_summary(request)
         extra_context['category_clear_url'] = self._build_url(request, {}, drop=[self.CATEGORY_PARAM])
         extra_context['active_category_id'] = request.GET.get(self.CATEGORY_PARAM, '')
@@ -395,17 +399,18 @@ class Events2PostAdmin(admin.ModelAdmin):
         query_string = urlencode(query_params, doseq=True)
         return f'{base_url}?{query_string}' if query_string else base_url
 
-    def _get_summary(self):
+    def _get_summary(self, request):
         """Status counters and upcoming/past/all counters in one query."""
         from django.db.models import Count
         from django.core.cache import cache
 
-        cached = cache.get(SUMMARY_CACHE_KEY)
+        cache_key = SUMMARY_CACHE_KEY.format(city=self.selected_city(request))
+        cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
         now = timezone.now()
-        row = Events2Post.objects.aggregate(
+        row = self.scope_by_city(request, Events2Post.objects.all()).aggregate(
             **{f'status_{key}': Count('id', filter=Q(status=key)) for key in self.SUMMARY_STATUS_KEYS},
             # upcoming должен совпадать с тем, что показывает get_queryset(show=upcoming)
             upcoming=Count('id', filter=Q(to_date__gte=now, status__in=self.UPCOMING_STATUSES)),
@@ -416,13 +421,13 @@ class Events2PostAdmin(admin.ModelAdmin):
                           for key in self.SUMMARY_STATUS_KEYS if row[f'status_{key}'] > 0]
         date_counts = {key: row[key] for key in ('upcoming', 'past', 'all')}
         result = (status_summary, date_counts)
-        cache.set(SUMMARY_CACHE_KEY, result, self.SUMMARY_CACHE_TTL)
+        cache.set(cache_key, result, self.SUMMARY_CACHE_TTL)
         return result
 
     def _base_queryset_for_date_filter(self, request):
         """Mirror get_queryset's date/visibility logic but ignore category — used
         for sidebar counters so they reflect the active date scope."""
-        qs = Events2Post.objects.all()
+        qs = self.scope_by_city(request, Events2Post.objects.all())
         show = request.GET.get('show')
         if show == 'upcoming':
             return qs.filter(to_date__gte=timezone.now(), status__in=self.UPCOMING_STATUSES)
@@ -442,7 +447,7 @@ class Events2PostAdmin(admin.ModelAdmin):
             scope = show
         else:
             scope = 'all' if request.GET.get('all') == 'true' else 'default'
-        cache_key = CATEGORY_SUMMARY_CACHE_KEY.format(scope=scope)
+        cache_key = CATEGORY_SUMMARY_CACHE_KEY.format(scope=scope, city=self.selected_city(request))
 
         counts = cache.get(cache_key)
         if counts is None:
@@ -541,11 +546,19 @@ class Events2PostAdmin(admin.ModelAdmin):
         )
     mark_as_duplicate.short_description = "Mark as Duplicate"
 
-    utils.post_date_order_by_queue.acts_on_all = True
+    def post_date_order_by_queue(self, request, queryset):
+        city = self.collection_city(request)
+        if city:
+            utils.post_date_order_by_queue(city=city)
+    post_date_order_by_queue.short_description = "Post date order by queue"
+    post_date_order_by_queue.acts_on_all = True
 
 
     # Change queue of events by round (1->2, 2->3, 3->1)
     def change_queue(self, request, queryset):
+        city = self.collection_city(request)
+        if city is None:
+            return
         len_que = len(queryset)
         for i in range(len_que):
             u = i + 1
@@ -554,7 +567,7 @@ class Events2PostAdmin(admin.ModelAdmin):
             queryset.filter(event_id=queryset[i].event_id).update(
                 queue=queryset[u].queue
             )
-        utils.post_date_order_by_queue(self, request, queryset)
+        utils.post_date_order_by_queue(city=city)
 
     change_queue.short_description = "Change event place"
 
@@ -671,7 +684,7 @@ class Events2PostAdmin(admin.ModelAdmin):
 weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-class PostingTimesAdmin(admin.ModelAdmin):
+class PostingTimesAdmin(CityScopedAdmin, admin.ModelAdmin):
 
     list_filter = ["kind", "start_weekday"]
     ordering = ["start_weekday", "posting_time"]
@@ -686,7 +699,8 @@ class PostingTimesAdmin(admin.ModelAdmin):
     list_display = ["id", weekdays, "posting_time", "kind"]
 
 
-class ParametersAdmin(admin.ModelAdmin):
+class ParametersAdmin(CityScopedAdmin, admin.ModelAdmin):
+    city_shared = True
     list_display = ['site', 'parameter_name', 'value', 'commentary']
     list_editable = ['value', 'commentary']
     actions = ["copy",]

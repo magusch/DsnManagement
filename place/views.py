@@ -4,6 +4,9 @@ import json
 from django.contrib.admin.views.decorators import staff_member_required
 # from django.shortcuts import redirect
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from city.context import city_from_request
+from city.models import City
+
 from .models import Place
 
 from django.template import loader
@@ -22,7 +25,7 @@ def place_address(request):
     address = {"raw_address": raw_address}
 
     if raw_address:
-        place_by_keywords = utils.address_from_places(raw_address)
+        place_by_keywords = utils.address_from_places(raw_address, city_from_request(request))
         if place_by_keywords:
             place = place_by_keywords[0]
             address.update({
@@ -50,7 +53,10 @@ def find_place(request):
         if request.method == 'GET':
             place_name = request.GET.get('query', '')
             places = list()
-            for place in Place.objects.filter(place_name__icontains=place_name):
+            places_qs = Place.objects.filter(place_name__icontains=place_name)
+            if request.city != City.ALL:
+                places_qs = places_qs.filter(city_id=request.city)
+            for place in places_qs:
                 places.append({
                     'id': place.id,
                     'place_name': place.place_name,

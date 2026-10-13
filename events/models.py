@@ -15,6 +15,7 @@ from .helper.colors import css_color
 import random
 
 
+from city.models import City, city_field, city_not_all_constraint
 from place.models import Place
 from category.models import SubCategory, Category
 
@@ -118,8 +119,10 @@ class EventsNotApprovedNew(models.Model):
     embedding = VectorField(dimensions=1536, null=True, blank=True)
     embedding_model = models.CharField(max_length=64, null=True, blank=True)
     embedding_updated_at = models.DateTimeField(null=True, blank=True)
+    city = city_field()
 
     class Meta:
+        constraints = [city_not_all_constraint()]
         indexes = [
             HnswIndex(
                 name="enapproved_new_emb_hnsw",
@@ -201,8 +204,10 @@ class EventsNotApprovedProposed(models.Model):
     embedding = VectorField(dimensions=1536, null=True, blank=True)
     embedding_model = models.CharField(max_length=64, null=True, blank=True)
     embedding_updated_at = models.DateTimeField(null=True, blank=True)
+    city = city_field()
 
     class Meta:
+        constraints = [city_not_all_constraint()]
         indexes = [
             HnswIndex(
                 name="enapproved_prop_emb_hnsw",
@@ -299,8 +304,10 @@ class Events2Post(models.Model):  # Table events for posting
     embedding = VectorField(dimensions=1536, null=True, blank=True)
     embedding_model = models.CharField(max_length=64, null=True, blank=True)
     embedding_updated_at = models.DateTimeField(null=True, blank=True)
+    city = city_field()
 
     class Meta:
+        constraints = [city_not_all_constraint()]
         indexes = [
             HnswIndex(
                 name="events2post_emb_hnsw",
@@ -430,6 +437,10 @@ class PostingTime(models.Model):
     end_weekday = models.IntegerField(default=6)
     posting_time = models.TimeField()
     kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_EVENT)
+    city = city_field()
+
+    class Meta:
+        constraints = [city_not_all_constraint()]
 
     def __str__(self):
         time = self.posting_time.strftime("%H:%M")
@@ -444,6 +455,8 @@ class Parameter(models.Model):  # Table events for posting
     value = models.CharField(max_length=500)
     commentary = models.CharField(max_length=500, null=True)
     full_value = models.TextField(blank=True, null=True)
+    # 'all' = shared parameter (prompts); a real city = that city's parameter/override.
+    city = city_field(City.ALL)
 
     def __str__(self):
         return (self.site + self.parameter_name)

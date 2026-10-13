@@ -5,6 +5,7 @@ from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
+from city.admin_mixins import CityScopedAdmin
 from events.helper.colors import css_color
 from .models import FilterSet, EventSelection, PostTemplate, GeneratedPost, PostingSchedule
 from .services import FilterService
@@ -14,7 +15,8 @@ from . import utils
 
 
 @admin.register(FilterSet)
-class FilterSetAdmin(admin.ModelAdmin):
+class FilterSetAdmin(CityScopedAdmin, admin.ModelAdmin):
+    city_shared = True
     list_display = ['name', 'filter_type', 'created_by', 'is_active', 'created_at']
     list_filter = ['filter_type', 'is_active', 'created_at']
     exclude = ['created_at']
@@ -63,7 +65,7 @@ class PostTemplateAdmin(admin.ModelAdmin):
 
 
 @admin.register(GeneratedPost)
-class GeneratedPostAdmin(admin.ModelAdmin):
+class GeneratedPostAdmin(CityScopedAdmin, admin.ModelAdmin):
     list_display = ['title', 'status', 'generated_by', 'created_at']
     list_filter = ['status', 'created_at']
     exclude = ['created_at', 'updated_at']
@@ -75,7 +77,9 @@ class GeneratedPostAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['theme_filter_sets'] = FilterSet.objects.filter(is_active=True).order_by('name')
+        themes = self.admin_site.get_model_admin(FilterSet).scope_by_city(
+            request, FilterSet.objects.filter(is_active=True))
+        extra_context['theme_filter_sets'] = themes.order_by('name')
         return super().changelist_view(request, extra_context=extra_context)
 
     @admin.display(description='Как будет выглядеть в канале')
@@ -131,7 +135,7 @@ class SlotFilter(admin.SimpleListFilter):
 
 
 @admin.register(PostingSchedule)
-class PostingScheduleAdmin(admin.ModelAdmin):
+class PostingScheduleAdmin(CityScopedAdmin, admin.ModelAdmin):
     list_display = ['post_title', 'scheduled_time', 'slot_state', 'theme', 'events_count',
                     'platform', 'status', 'post_link', 'post_preview']
     list_filter = [SlotFilter, 'platform', 'status']
@@ -165,7 +169,7 @@ class PostingScheduleAdmin(admin.ModelAdmin):
     def _slot_summary(self, request):
         """Counters for the toolbar — one aggregate query, each links to a filter."""
         now = timezone.now()
-        counts = PostingSchedule.objects.aggregate(
+        counts = self.scope_by_city(request, PostingSchedule.objects.all()).aggregate(
             all=Count('id'),
             upcoming=Count('id', filter=Q(is_posted=False, scheduled_time__gte=now)),
             overdue=Count('id', filter=Q(is_posted=False,
@@ -265,6 +269,7 @@ def generate_post_action(modeladmin, request, queryset):
         events = selection.selected_events.all() # .filter(is_ready=True)
         content = utils.generate_post(events, template.template_text)
         GeneratedPost.objects.create(
+            city_id=selection.city_id,
             event_selection=selection,
             post_template=template,
             title=f"Подборка: {selection.name}",
@@ -276,7 +281,7 @@ def generate_post_action(modeladmin, request, queryset):
 
 
 @admin.register(EventSelection)
-class EventSelectionAdmin(admin.ModelAdmin):
+class EventSelectionAdmin(CityScopedAdmin, admin.ModelAdmin):
     list_display = ['name', 'filter_set', 'status', 'created_by', 'created_at']
     list_filter = ['status', 'created_at']
     exclude = ['created_at']
@@ -303,7 +308,7 @@ class EventSelectionAdmin(admin.ModelAdmin):
         obj = form.instance
         if obj.filter_set:
             existing_events = set(obj.selected_events.all())
-            filtered_events = FilterService.apply_filters(obj.filter_set)
+            filtered_events = FilterService.apply_filters(obj.filter_set, city=obj.city_id)
             all_events = existing_events.union(filtered_events)
             obj.selected_events.set(all_events)
 

@@ -3,9 +3,13 @@ from django.db.models import F, Value, CharField
 from .models import PlaceKeyword, Place, DistrictKeyword
 
 
-def address_from_places(raw_address):
+def address_from_places(raw_address, city=None):
+    """Places whose keyword occurs in the address; city=None searches every city."""
     places_by_keyword = PlaceKeyword.objects.annotate(querystring=Value(raw_address.lower(), output_field=CharField())) \
         .filter(querystring__icontains=F('place_keyword'))
+    if city is not None:
+        # Street names repeat between cities.
+        places_by_keyword = places_by_keyword.filter(place__city_id=city)
 
     return places_by_keyword
 

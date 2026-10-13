@@ -8,6 +8,8 @@ from .models import (
 
 from datetime import timedelta
 
+from city.admin_mixins import CityScopedAdmin
+
 
 class PlaceScheduleInline(admin.TabularInline):
     model = PlaceSchedule
@@ -24,10 +26,10 @@ class PlaceScheduleInline(admin.TabularInline):
         return super().get_extra(request, obj, **kwargs)
 
 
-class PlaceAdmin(admin.ModelAdmin):
+class PlaceAdmin(CityScopedAdmin, admin.ModelAdmin):
     list_display = [str, 'place_name', 'main_place', 'district', 'category', 'place_url', 'url_to_address']
     list_editable = ['category']
-    list_filter = ['place_city', 'district', 'main_place']
+    list_filter = ['district', 'main_place']
     search_fields = ["place_name", "place_address", "place_metro", "category", "district_raw"]
     autocomplete_fields = ['main_place', 'district']
     inlines = [PlaceScheduleInline]
@@ -59,7 +61,8 @@ class PlaceAdmin(admin.ModelAdmin):
         formset.save_m2m()
 
 
-class PlaceScheduleAdmin(admin.ModelAdmin):
+class PlaceScheduleAdmin(CityScopedAdmin, admin.ModelAdmin):
+    city_lookup = 'place__city'
     list_display = [str, 'place', "open_time", "close_time", ]
     actions = ['duplicate_schedule']
     list_editable = ["open_time", "close_time", ]
@@ -109,7 +112,8 @@ class PlaceScheduleAdmin(admin.ModelAdmin):
         )
 
 
-class PlaceKeywordAdmin(admin.ModelAdmin):
+class PlaceKeywordAdmin(CityScopedAdmin, admin.ModelAdmin):
+    city_lookup = 'place__city'
     readonly_fields = ('place_searching',)
 
     class Media:
@@ -126,15 +130,15 @@ class DistrictKeywordInline(admin.TabularInline):
     fields = ('district_keyword',)
 
 
-class DistrictAdmin(admin.ModelAdmin):
-    list_display = ['name', 'place_city', 'parent']
-    list_filter = ['place_city']
+class DistrictAdmin(CityScopedAdmin, admin.ModelAdmin):
+    list_display = ['name', 'parent']
     search_fields = ['name', 'place_city', 'keywords__district_keyword']
     autocomplete_fields = ['parent']
     inlines = [DistrictKeywordInline]
 
 
-class DistrictKeywordAdmin(admin.ModelAdmin):
+class DistrictKeywordAdmin(CityScopedAdmin, admin.ModelAdmin):
+    city_lookup = 'district__city'
     list_display = ['district_keyword', 'district']
     search_fields = ['district_keyword', 'district__name']
     autocomplete_fields = ['district']

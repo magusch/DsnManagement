@@ -20,5 +20,6 @@ urlpatterns = [
     path("events/", include("events.urls")),
     path("place/", include("place.urls")),
     path("content_generator/", include("content_generator.urls")),
+    path("city/", include("city.urls")),
     path("", admin.site.urls),
 ]

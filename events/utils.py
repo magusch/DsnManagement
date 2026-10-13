@@ -7,6 +7,8 @@ from typing import Generator, List
 from django.utils import timezone
 from django.forms.models import model_to_dict
 
+from city.models import City
+
 from .models import Events2Post, PostingTime, Event
 
 from .helper.post_helper import PostHelper
@@ -14,6 +16,12 @@ from .helper.post_helper import PostHelper
 
 CHANNEL_API_URL = os.environ.get("CHANNEL_API_URL")
 CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
+
+def bot_handles_city(city):
+    """ChannelBot is not city-aware yet: it resolves places and prompts as SPb and
+    creates rows with the SPb default. Work for other cities stays in Django."""
+    return city == City.SPB
+
 
 _FREE_KEYWORDS = ('бесплатно', 'free', 'вход свободный', 'свободный вход', 'бесплатный')
 
@@ -83,7 +91,7 @@ def _postin_times(target_time: datetime=None):
         yield from next(times)
 
 
-def refresh_posting_time(self, request, queryset):
+def refresh_posting_time(self, request, queryset, city=City.SPB):
     """
     Parameters
     ----------
@@ -109,7 +117,7 @@ def refresh_posting_time(self, request, queryset):
         #     pass
 
         last_post = (
-            Events2Post.objects.filter(status="ReadyToPost")
+            Events2Post.objects.filter(status="ReadyToPost", city_id=city)
             .filter(queue__lt=event.queue)
             .order_by("-post_date")
             .first()
@@ -119,7 +127,7 @@ def refresh_posting_time(self, request, queryset):
         else:
             last_post_time = last_post.post_date
 
-        post_time = good_post_time(last_post_time)
+        post_time = good_post_time(last_post_time, city)
         if post_time is None:  # no active event slots — keep the dates as they are
             break
         event.post_date = post_time
@@ -130,12 +138,11 @@ def refresh_posting_time(self, request, queryset):
 
 
 # Order by queue and change post_time in this order
-def post_date_order_by_queue(*kwargs):
-    query_post_date_ordered = Events2Post.objects.filter(status="ReadyToPost").order_by(
-        "post_date"
-    )
+def post_date_order_by_queue(city=City.SPB):
+    ready = Events2Post.objects.filter(status="ReadyToPost", city_id=city)
+    query_post_date_ordered = ready.order_by("post_date")
     query_post_date_ordered_list = [pd.post_date for pd in query_post_date_ordered]
-    query_queue_ordered = Events2Post.objects.filter(status="ReadyToPost").order_by("queue")
+    query_queue_ordered = ready.order_by("queue")
     for i, event in enumerate(query_queue_ordered):
 
         event.post_date = query_post_date_ordered_list[0]
@@ -143,20 +150,21 @@ def post_date_order_by_queue(*kwargs):
         event.save()
 
 
-def last_post_date():
+def last_post_date(city=City.SPB):
     last_post_event = (
-        Events2Post.objects.filter(status="ReadyToPost").filter(post_date__isnull=False).order_by("-post_date").first()
+        Events2Post.objects.filter(status="ReadyToPost", city_id=city)
+        .filter(post_date__isnull=False).order_by("-post_date").first()
     )
     if last_post_event:
         last_queue_event = Events2Post.objects.order_by("-queue").first()
         last_queue = last_queue_event.queue if last_queue_event else 0
         try:
-            post_time = good_post_time(last_post_event.post_date)
+            post_time = good_post_time(last_post_event.post_date, city)
         except (AttributeError, ValueError, TypeError):
-            post_time = good_post_time(timezone.now())
+            post_time = good_post_time(timezone.now(), city)
         return post_time, last_queue + 2
 
-    post_time = empty_queryset()
+    post_time = empty_queryset(city)
     return post_time, 1
 
 
@@ -167,7 +175,8 @@ def _serialize_for_api(value):
 
 
 # Move Events form not approved table to table with approved Events2Post
-def move_event_to_post(Events_model):
+def move_event_to_post(Events_model, city=None):
+    """city=None moves approved events of every city."""
     event2post_list = [
         "event_id",
         "title",
@@ -186,9 +195,15 @@ def move_event_to_post(Events_model):
         "source"
     ]
 
-    events_list = list(Events_model.objects.filter(approved=True))
-    if not events_list:
+    approved = Events_model.objects.filter(approved=True)
+    if city is not None:
+        approved = approved.filter(city_id=city)
+    approved = list(approved)
+    if not approved:
         return
+
+    events_list = [e for e in approved if bot_handles_city(e.city_id)]
+    local_events = [e for e in approved if not bot_handles_city(e.city_id)]
 
     payload_events = []
     for event in events_list:
@@ -198,14 +213,16 @@ def move_event_to_post(Events_model):
             event_dict['place_id'] = event.place.id
         payload_events.append({k: _serialize_for_api(v) for k, v in event_dict.items()})
 
-    response, error = channel_api_request({
-        "api_url": "api/events/bulk_create_post/",
-        "method": "POST",
-        "data": {"events": payload_events, "save": True},
-    })
+    response, error = None, None
+    if payload_events:
+        response, error = channel_api_request({
+            "api_url": "api/events/bulk_create_post/",
+            "method": "POST",
+            "data": {"events": payload_events, "save": True},
+        })
 
-    failed_events = []
-    if not error:
+    failed_events = list(local_events)
+    if payload_events and not error:
         try:
             api_results = response.json().get('result', [])
         except Exception:
@@ -221,17 +238,17 @@ def move_event_to_post(Events_model):
 
         if saved_ids:
             Events_model.objects.filter(id__in=saved_ids).delete()
+    elif payload_events:
+        failed_events += events_list
 
-        if not failed_events:
-            return
-    else:
-        failed_events = events_list
-
-    post_date, queue = last_post_date()
+    if not failed_events:
+        return
 
     for event in failed_events:
+        post_date, queue = last_post_date(event.city_id)
         event_dict = model_to_dict(event, fields=event2post_list)
         event_dict['prepared_text'] = event_dict['post']
+        event_dict['city_id'] = event.city_id
         ev = make_a_post_text(event_dict)
         event_dict['post'] = ev['post']
         event_dict['place_id'] = ev['place'] if ev['place'] is not None else (event.place.id if event.place is not None else None)
@@ -243,7 +260,6 @@ def move_event_to_post(Events_model):
         Events2Post.objects.create(
             status="ReadyToPost", post_date=post_date, queue=queue, **event_dict
         )
-        post_date, queue = last_post_date()
 
     Events_model.objects.filter(id__in=[e.id for e in failed_events]).delete()
 
@@ -289,13 +305,14 @@ def _slot_at(day, slot):
     return timezone.make_aware(datetime.datetime.combine(day, slot.posting_time))
 
 
-def next_slot(after, kind=PostingTime.KIND_EVENT, max_days=14):
-    """First slot of the given kind strictly later than `after`."""
+def next_slot(after, kind=PostingTime.KIND_EVENT, city=City.SPB, max_days=14):
+    """First slot of the given kind and city strictly later than `after`."""
     local_after = timezone.localtime(after)
     day = local_after.date()
     for shift in range(max_days + 1):
         slots = PostingTime.objects.filter(
             kind=kind,
+            city_id=city,
             start_weekday__lte=day.weekday(),
             end_weekday__gte=day.weekday(),
         )
@@ -308,30 +325,34 @@ def next_slot(after, kind=PostingTime.KIND_EVENT, max_days=14):
     return None
 
 
-def good_post_time(last_post_time):
+def good_post_time(last_post_time, city=City.SPB):
     if last_post_time <= timezone.now():
         last_post_time = timezone.now()
-    return next_slot(last_post_time)
+    return next_slot(last_post_time, city=city)
 
 
 # take posting time for last event
 
 
-def empty_queryset():
+def empty_queryset(city=City.SPB):
     tomorrow = timezone.localtime() + timezone.timedelta(days=1)
     start_of_tomorrow = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
-    return next_slot(start_of_tomorrow - timezone.timedelta(microseconds=1))
+    return next_slot(start_of_tomorrow - timezone.timedelta(microseconds=1), city=city)
 
 
-def delete_old_events(Events_model):
+def delete_old_events(Events_model, city=None):
+    """city=None cleans every city."""
     if Events_model == Events2Post:
         return
     today = timezone.now()
-    Events_model.objects.filter(to_date__lt=today).delete()
+    old = Events_model.objects.filter(to_date__lt=today)
+    if city is not None:
+        old = old.filter(city_id=city)
+    old.delete()
 
 
-def count_events_by_day(*kwargs):
-    query_post_date_ordered = Events2Post.objects.filter(status="ReadyToPost").order_by(
+def count_events_by_day(city=City.SPB):
+    query_post_date_ordered = Events2Post.objects.filter(status="ReadyToPost", city_id=city).order_by(
         "queue"
     )
     check_day = timezone.now().date()
@@ -357,11 +378,14 @@ def count_events_by_day(*kwargs):
 def make_a_post_text(event, save=0):
     remake_event_data = {}
     if type(event) == Events2Post:
-        response, error = channel_api_request({
-            "api_url": f"api/events/remake_post/{event.id}?save={'true' if save else 'false'}",
-            "method": "POST",
-            "data": {},
-        })
+        if bot_handles_city(event.city_id):
+            response, error = channel_api_request({
+                "api_url": f"api/events/remake_post/{event.id}?save={'true' if save else 'false'}",
+                "method": "POST",
+                "data": {},
+            })
+        else:
+            response, error = None, "city is not supported by the bot"
         if not error:
             result = response.json().get('result', {})
             remake_event_data['post'] = result.get('post', '')
@@ -378,13 +402,16 @@ def make_a_post_text(event, save=0):
         import datetime as _dt
         serializable = {
             k: v.isoformat() if isinstance(v, (_dt.datetime, _dt.date)) else v
-            for k, v in event.items()
+            for k, v in event.items() if k != 'city_id'
         }
-        response, error = channel_api_request({
-            "api_url": "api/events/make_post/",
-            "method": "POST",
-            "data": serializable,
-        })
+        if bot_handles_city(event.get('city_id', City.SPB)):
+            response, error = channel_api_request({
+                "api_url": "api/events/make_post/",
+                "method": "POST",
+                "data": serializable,
+            })
+        else:
+            response, error = None, "city is not supported by the bot"
         if not error:
             result = response.json().get('result', {})
             remake_event_data['post'] = result.get('post', '')

@@ -33,10 +33,12 @@ class FilterService:
     """
 
     @staticmethod
-    def apply_filters(filter_set: FilterSet):
-        """Apply filters and return filtered events queryset."""
+    def apply_filters(filter_set: FilterSet, city=None):
+        """Apply filters and return filtered events queryset; city=None — every city."""
         params = filter_set.filter_params
         queryset = Events2Post.objects.filter(status__in=['Posted', 'ReadyToPost'])
+        if city is not None:
+            queryset = queryset.filter(city_id=city)
 
         today = django_tz.localdate()
         week_ahead = today + timedelta(days=7)

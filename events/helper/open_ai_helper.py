@@ -3,6 +3,8 @@ import json
 
 from openai import OpenAI
 
+from city.models import City, get_city
+
 from .load_parameters import ParametersManager
 
 DEFAULT_MODEL = 'gpt-5.4-mini'
@@ -11,9 +13,15 @@ DEFAULT_VERBOSITY = 'medium'
 DEFAULT_MAX_OUTPUT_TOKENS = 4000
 
 DEFAULT_SYSTEM_MESSAGE = (
-    "Ты редактор-копирайтер для телеграм канала о мероприятиях в Санкт-Петербурге. "
+    "Ты редактор-копирайтер для телеграм канала о мероприятиях {city_loc}. "
     "У нас есть сырая информация по мероприятию, необходимо адаптировать её для поста."
 )
+
+
+def default_system_message(city_id):
+    city = get_city(city_id or City.SPB)
+    city_loc = city.name_loc if city and city.name_loc else "в Санкт-Петербурге"
+    return DEFAULT_SYSTEM_MESSAGE.format(city_loc=city_loc)
 
 DEFAULT_USER_MESSAGE = """Необходимо прочитать текст, заголовок и другую информацию и отредактировать их по следующим инструкциям.
 
@@ -93,7 +101,7 @@ class OpenAIHelper:
         self.verbosity = param.get_parameter('openai_verbosity') or DEFAULT_VERBOSITY
 
     def refactor_post(self, event):
-        system_message = self.system_message or DEFAULT_SYSTEM_MESSAGE
+        system_message = self.system_message or default_system_message(event.get('city_id'))
         user_message = self.user_message or DEFAULT_USER_MESSAGE
 
         event_block = f"""

@@ -7,6 +7,7 @@ from django.utils.safestring import mark_safe
 from django.utils import timezone as django_tz
 
 from events.helper.datetime_helper import weekday_name, month_name
+from city.models import City
 from events.models import PostingTime
 from events.utils import channel_api_request, next_slot
 
@@ -210,7 +211,7 @@ def theme_post_api(filter_set_id=None, dry_run=False):
         return None, "Невалидный ответ от API"
 
 
-def refresh_digest_posting_time():
+def refresh_digest_posting_time(city=City.SPB):
     """Put pending digests into the `digest` PostingTime slots, one per slot.
 
     Pending = not posted and ReadyToPost (overdue ones included — they need a new
@@ -220,13 +221,13 @@ def refresh_digest_posting_time():
     from .models import PostingSchedule
 
     pending = PostingSchedule.objects.filter(
-        is_posted=False, status="ReadyToPost"
+        is_posted=False, status="ReadyToPost", city_id=city
     ).order_by("scheduled_time", "id")
 
     updated = []
     slot_time = django_tz.now()
     for schedule in pending:
-        slot_time = next_slot(slot_time, kind=PostingTime.KIND_DIGEST)
+        slot_time = next_slot(slot_time, kind=PostingTime.KIND_DIGEST, city=city)
         if slot_time is None:
             break
         schedule.scheduled_time = slot_time

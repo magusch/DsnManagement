@@ -200,9 +200,23 @@
 {% endblock %}
 
 {% block nav-global %}
-<div style="background:#417690; padding:4px 20px; display:flex; gap:12px;">
+<div style="background:#417690; padding:4px 20px; display:flex; gap:12px; align-items:center;">
     <a href="{% url 'content_generator_wizard' %}" style="color:#fff; text-decoration:none; padding:4px 12px; background:#6f42c1; border-radius:4px; font-size:13px;">
         Генератор контента
     </a>
+    {% if city_choices %}
+    {# Orange in the "all cities" mode: actions there are not tied to one channel. #}
+    <form method="post" action="{% url 'switch_city' %}" style="margin:0 0 0 auto; display:flex; align-items:center; gap:6px;">
+        {% csrf_token %}
+        <label for="dsn-city-switch" style="color:#fff; font-size:13px;">Город:</label>
+        <select id="dsn-city-switch" name="city" onchange="this.form.submit()"
+                style="color:#fff; background:{% if current_city.code == 'all' %}#fd7e14{% else %}#28a745{% endif %}; border:none; border-radius:4px; padding:4px 8px; font-size:13px; font-weight:bold;">
+            {% for c in city_choices %}
+            <option value="{{ c.code }}"{% if c.code == current_city.code %} selected{% endif %}>{{ c.name }}{% if not c.is_active and c.code != 'all' %} (неактивен){% endif %}</option>
+            {% endfor %}
+        </select>
+        <noscript><button type="submit">OK</button></noscript>
+    </form>
+    {% endif %}
 </div>
 {% endblock %}

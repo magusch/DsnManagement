@@ -10,6 +10,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.template import loader
 from django.contrib import messages
 
+from city.context import city_context, city_from_request
+from city.models import City
+
 from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, Parameter, Event, PostingTime
 
 from . import utils
@@ -20,11 +23,13 @@ from django.db import close_old_connections
 from types import SimpleNamespace
 
 
-def _run_in_background(target, *args, **kwargs):
+def _run_in_background(target, *args, city=None, **kwargs):
+    # The thread doesn't inherit the request's timezone override — enter the city again.
     def _wrapper():
         try:
             close_old_connections()
-            target(*args, **kwargs)
+            with city_context(city):
+                target(*args, **kwargs)
         finally:
             close_old_connections()
     threading.Thread(target=_wrapper, daemon=True).start()
@@ -70,15 +75,17 @@ def check_event_status(request):
 
 @staff_member_required
 def count_events_by_day(request):
-    answer = json.dumps(utils.count_events_by_day())
+    answer = json.dumps(utils.count_events_by_day(city_from_request(request)))
     return HttpResponse(answer)
 
 @staff_member_required
 def move_approved_events(request):
+    city = city_from_request(request)
+
     def _do_move():
-        utils.move_event_to_post(EventsNotApprovedNew)
-        utils.move_event_to_post(EventsNotApprovedProposed)
-    _run_in_background(_do_move)
+        utils.move_event_to_post(EventsNotApprovedNew, city)
+        utils.move_event_to_post(EventsNotApprovedProposed, city)
+    _run_in_background(_do_move, city=city)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -99,11 +106,13 @@ def transfer_posted_events_to_site(request):
 
 @staff_member_required
 def remove_old_events(request):
+    city = city_from_request(request)
+
     def _do_delete():
-        utils.delete_old_events(EventsNotApprovedNew)
-        utils.delete_old_events(EventsNotApprovedProposed)
-        utils.delete_old_events(Events2Post)
-    _run_in_background(_do_delete)
+        utils.delete_old_events(EventsNotApprovedNew, city)
+        utils.delete_old_events(EventsNotApprovedProposed, city)
+        utils.delete_old_events(Events2Post, city)
+    _run_in_background(_do_delete, city=city)
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
     else:
@@ -111,25 +120,25 @@ def remove_old_events(request):
     return response
 
 
-def _refresh_event_posting_time(ids, body=""):
+def _refresh_event_posting_time(ids, city, body=""):
     req = SimpleNamespace(body=body)
-    qs = Events2Post.objects.filter(id__in=ids).order_by("queue")
-    return utils.refresh_posting_time(None, req, queryset=qs)
+    qs = Events2Post.objects.filter(id__in=ids, city_id=city).order_by("queue")
+    return utils.refresh_posting_time(None, req, queryset=qs, city=city)
 
 
-def _fill_posting_time(kind, body=""):
+def _fill_posting_time(kind, city, body=""):
     """Returns [(pk, aware datetime)] of the rows that got a new time."""
     if kind == PostingTime.KIND_DIGEST:
         from content_generator.utils import refresh_digest_posting_time
 
-        return [(s.pk, s.scheduled_time) for s in refresh_digest_posting_time()]
+        return [(s.pk, s.scheduled_time) for s in refresh_digest_posting_time(city)]
 
     event_ids = list(
-        Events2Post.objects.filter(status="ReadyToPost")
+        Events2Post.objects.filter(status="ReadyToPost", city_id=city)
         .order_by("queue")
         .values_list("id", flat=True)
     )
-    return [(e.pk, e.post_date) for e in _refresh_event_posting_time(event_ids, body)]
+    return [(e.pk, e.post_date) for e in _refresh_event_posting_time(event_ids, city, body)]
 
 
 @csrf_exempt
@@ -145,9 +154,10 @@ def fill_empty_post_time(request):
         return JsonResponse({"error": f"Unknown kind: {kind}"}, status=400)
 
     body_str = request.body.decode("utf-8", errors="ignore") if request.method == "GET" else ""
+    city = city_from_request(request)
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        updated = _fill_posting_time(kind, body_str)
+        updated = _fill_posting_time(kind, city, body_str)
         return JsonResponse({
             "kind": kind,
             "count": len(updated),
@@ -162,7 +172,7 @@ def fill_empty_post_time(request):
             ],
         })
 
-    _run_in_background(_fill_posting_time, kind, body_str)
+    _run_in_background(_fill_posting_time, kind, city, body_str, city=city)
 
     if 'HTTP_REFERER' in request.META:
         return redirect(request.META['HTTP_REFERER'])
@@ -171,27 +181,29 @@ def fill_empty_post_time(request):
 
 @staff_member_required
 def update_all(request):
+    city = city_from_request(request)
+
     def _do_update_all():
         try:
-            utils.move_event_to_post(EventsNotApprovedNew)
-            utils.move_event_to_post(EventsNotApprovedProposed)
+            utils.move_event_to_post(EventsNotApprovedNew, city)
+            utils.move_event_to_post(EventsNotApprovedProposed, city)
 
             ids = list(
-                Events2Post.objects.filter(status="ReadyToPost")
+                Events2Post.objects.filter(status="ReadyToPost", city_id=city)
                 .order_by("queue")
                 .values_list("id", flat=True)
             )
-            _refresh_event_posting_time(ids)
+            _refresh_event_posting_time(ids, city)
 
-            utils.post_date_order_by_queue()
-            utils.delete_old_events(EventsNotApprovedNew)
-            utils.delete_old_events(EventsNotApprovedProposed)
-            utils.delete_old_events(Events2Post)
+            utils.post_date_order_by_queue(city)
+            utils.delete_old_events(EventsNotApprovedNew, city)
+            utils.delete_old_events(EventsNotApprovedProposed, city)
+            utils.delete_old_events(Events2Post, city)
             utils.move_event_to_site(Events2Post)
         finally:
             pass
 
-    _run_in_background(_do_update_all)
+    _run_in_background(_do_update_all, city=city)
 
     if 'HTTP_REFERER' in request.META:
         response = redirect(request.META['HTTP_REFERER'])
@@ -201,11 +213,19 @@ def update_all(request):
     return response
 
 
+def merge_city_parameters(rows, city):
+    """A city's own rows replace the shared ('all') rows with the same (site, name)."""
+    overridden = {(r['site'], r['parameter_name']) for r in rows if r['city_id'] == city}
+    return [r for r in rows
+            if r['city_id'] == city or (r['site'], r['parameter_name']) not in overridden]
+
+
 @csrf_exempt
 @staff_member_required
 def get_parameters(request):
     if request.method == "GET":
-        prms = Parameter.objects
+        city = city_from_request(request)
+        prms = Parameter.objects.filter(city_id__in=[city, City.ALL])
 
         if 'site' in request.GET:
             prms = prms.filter(site=request.GET['site'])
@@ -213,9 +233,7 @@ def get_parameters(request):
         if 'name' in request.GET:
             prms = prms.filter(parameter_name=request.GET['name'])
 
-        params_in_db = []
-        for row in prms.values():
-            params_in_db.append(row)
+        params_in_db = merge_city_parameters(list(prms.values()), city)
         return HttpResponse(json.dumps(params_in_db))
 
 # From post text to html
@@ -294,7 +312,9 @@ def remake_post_ai(request, id=0, save=0):
 
 @staff_member_required
 def check_posts(request):
-    ready_to_post_events = Events2Post.objects.filter(status="ReadyToPost").order_by("queue").all()
+    ready_to_post_events = (Events2Post.objects
+                            .filter(status="ReadyToPost", city_id=city_from_request(request))
+                            .order_by("queue"))
     result = []
 
     for event in ready_to_post_events:

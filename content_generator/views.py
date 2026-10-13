@@ -5,6 +5,7 @@ from django.views.decorators.http import require_POST
 
 import logging
 
+from city.models import City
 from events.utils import channel_api_request
 from .models import FilterSet, PostTemplate, GeneratedPost, EventSelection
 from .services import FilterService
@@ -12,9 +13,24 @@ from .services import FilterService
 logger = logging.getLogger("content_generator")
 
 
+def _filter_city(request):
+    """None in the 'all cities' mode — filters then cover every city."""
+    return None if request.city == City.ALL else request.city
+
+
+def _selection_city(request, events):
+    """A selection belongs to one city: its events' city, else the switcher's, else SPb."""
+    cities = set(events.values_list("city_id", flat=True))
+    if len(cities) == 1:
+        return cities.pop()
+    return _filter_city(request) or City.SPB
+
+
 @staff_member_required
 def wizard_view(request):
     filter_sets = FilterSet.objects.filter(is_active=True).order_by("name")
+    if _filter_city(request):
+        filter_sets = filter_sets.filter(city_id__in=[request.city, City.ALL])
     templates = PostTemplate.objects.filter(is_active=True).order_by("name")
     template_data = {str(t.id): t.template_text for t in templates}
     context = {
@@ -45,7 +61,7 @@ def apply_filters_view(request):
             "events": [], "error": "Набор фильтров не найден",
         })
 
-    events = FilterService.apply_filters(filter_set).order_by("from_date")
+    events = FilterService.apply_filters(filter_set, city=_filter_city(request)).order_by("from_date")
     return render(request, "content_generator/partials/events_table.html", {
         "events": events,
         "total_count": events.count(),
@@ -168,13 +184,14 @@ def generate_post_api_view(request):
 
     # Create EventSelection so API can reference it by ID
     from events.models import Events2Post
+    events = Events2Post.objects.filter(id__in=int_event_ids)
     selection = EventSelection.objects.create(
         name=title or "Wizard selection",
         filter_set=FilterSet.objects.first(),
         status="ready",
         created_by=request.user,
+        city_id=_selection_city(request, events),
     )
-    events = Events2Post.objects.filter(id__in=int_event_ids)
     selection.selected_events.set(events)
 
     if method == "ai":
@@ -357,13 +374,14 @@ def save_post_view(request):
         selection = None
         if event_id_list:
             from events.models import Events2Post
+            events = Events2Post.objects.filter(id__in=event_id_list)
             selection = EventSelection.objects.create(
                 name=title,
                 filter_set=FilterSet.objects.first(),
                 status="completed",
                 created_by=request.user,
+                city_id=_selection_city(request, events),
             )
-            events = Events2Post.objects.filter(id__in=event_id_list)
             selection.selected_events.set(events)
             logger.info("[SAVE] Selection id=%s, events=%d", selection.id, events.count())
 
@@ -376,6 +394,7 @@ def save_post_view(request):
         image = request.POST.get("image", "") or None
 
         post = GeneratedPost.objects.create(
+            city_id=selection.city_id if selection else (_filter_city(request) or City.SPB),
             event_selection=selection,
             title=title,
             content=content,

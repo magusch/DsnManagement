@@ -6,6 +6,7 @@ from .datetime_helper import weekday_name, month_name
 from .markdown_v2 import escape_v2, escape_v2_url
 
 from category.models import SubCategory
+from city.models import City, get_city
 
 import pytz
 
@@ -22,6 +23,8 @@ class PostHelper:
         if type(event) == dict:
             event = DictAsMethods(event)
         self.event = event
+        # Dict events and old rows may have no city — they are SPb.
+        self.city_id = getattr(event, 'city_id', None) or City.SPB
         self.dates_to_right_tz()
 
         from .load_parameters import ParametersManager
@@ -170,7 +173,7 @@ class PostHelper:
 
         if address_line is None:
             raw_address = self.event.address
-            addresses = address_from_places(raw_address)
+            addresses = address_from_places(raw_address, self.city_id)
 
             if addresses:
                 address_line = addresses[0].place.markdown_address(need_address_line_url)
@@ -179,7 +182,9 @@ class PostHelper:
             else:
                 escaped_addr = escape_v2(self.event.address)
                 if need_address_line_url:
-                    addr_url = escape_v2_url(f"https://2gis.ru/spb/search/{self.event.address}")
+                    city = get_city(self.city_id)
+                    slug = city.dgis_slug if city and city.dgis_slug else City.SPB
+                    addr_url = escape_v2_url(f"https://2gis.ru/{slug}/search/{self.event.address}")
                     address_line = f"[{escaped_addr}]({addr_url})"
                 else:
                     address_line = escaped_addr
@@ -188,7 +193,7 @@ class PostHelper:
 
     def place_id(self):
         raw_address = self.event.address
-        addresses = address_from_places(raw_address)
+        addresses = address_from_places(raw_address, self.city_id)
         if hasattr(self.event, 'place_id'):
             if self.event.place_id is None and addresses:
                 self.event.place_id = addresses[0].place.id

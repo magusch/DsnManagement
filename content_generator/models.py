@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from city.models import City, city_field, city_not_all_constraint
 from events.models import Events2Post
 
 from django.utils import timezone
@@ -21,6 +22,8 @@ class FilterSet(models.Model):
     is_active = models.BooleanField(default=True)
 
     filter_params = models.JSONField(default=dict, help_text='Параметры фильтрации в JSON формате')
+    # 'all' = theme for every city.
+    city = city_field(City.ALL)
 
     class Meta:
         verbose_name = 'Набор фильтров'
@@ -48,8 +51,10 @@ class EventSelection(models.Model):
     updated_at = models.DateTimeField(auto_now=True, null=True)
 
     generation_settings = models.JSONField(default=dict, blank=True, null=True)
+    city = city_field()
 
     class Meta:
+        constraints = [city_not_all_constraint()]
         verbose_name = 'Подборка мероприятий'
         verbose_name_plural = 'Подборки мероприятий'
 
@@ -98,8 +103,10 @@ class GeneratedPost(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     generated_by = models.ForeignKey(User, on_delete=models.CASCADE, editable=False, default=1, null=True)
+    city = city_field()
 
     class Meta:
+        constraints = [city_not_all_constraint()]
         verbose_name = 'Сгенерированный пост'
         verbose_name_plural = 'Сгенерированные посты'
 
@@ -144,8 +151,10 @@ class PostingSchedule(models.Model):
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True, null=True)
+    city = city_field()
 
     class Meta:
+        constraints = [city_not_all_constraint()]
         verbose_name = 'Расписание постинга'
         verbose_name_plural = 'Расписание постинга'
         ordering = ['scheduled_time']
