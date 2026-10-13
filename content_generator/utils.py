@@ -1,9 +1,14 @@
+import re
 from collections import defaultdict
+
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 
 from django.utils import timezone as django_tz
 
 from events.helper.datetime_helper import weekday_name, month_name
-from events.utils import channel_api_request
+from events.models import PostingTime
+from events.utils import channel_api_request, next_slot
 
 
 class SafeDict(defaultdict):
@@ -180,3 +185,131 @@ def generate_post_api(event_selection_id, template_id):
         return None
     if response.status_code == 200:
         return True
+
+
+def theme_post_api(filter_set_id=None, dry_run=False):
+    """Ask the channel API to build a themed digest post.
+
+    Without filter_set_id the API picks the least-recently-posted active theme.
+    Returns (result_dict, error_message) — result is the raw API JSON
+    (usually {'message': ..., 'task_id': ...}).
+    """
+    payload = {"filter_set_id": filter_set_id, "dry_run": bool(dry_run)}
+
+    response, error = channel_api_request({
+        "api_url": "api/content-generator/theme-post/",
+        "method": "POST",
+        "data": payload,
+    })
+    if error:
+        return None, error
+
+    try:
+        return response.json(), None
+    except Exception:
+        return None, "Невалидный ответ от API"
+
+
+def refresh_digest_posting_time():
+    """Put pending digests into the `digest` PostingTime slots, one per slot.
+
+    Pending = not posted and ReadyToPost (overdue ones included — they need a new
+    time anyway). Their current order is kept. Returns the updated schedules;
+    empty when there are no active digest slots.
+    """
+    from .models import PostingSchedule
+
+    pending = PostingSchedule.objects.filter(
+        is_posted=False, status="ReadyToPost"
+    ).order_by("scheduled_time", "id")
+
+    updated = []
+    slot_time = django_tz.now()
+    for schedule in pending:
+        slot_time = next_slot(slot_time, kind=PostingTime.KIND_DIGEST)
+        if slot_time is None:
+            break
+        schedule.scheduled_time = slot_time
+        schedule.save(update_fields=["scheduled_time", "updated_at"])
+        updated.append(schedule)
+    return updated
+
+
+# --- Post markdown → HTML (channel preview) ---------------------------------
+
+_MEDIA_RE = re.compile(r'!\[([^\]]*)\]\(tg://photo\?id=([^)]*)\)')
+_TG_EMOJI_RE = re.compile(r'!\[([^\]]*)\]\(tg://emoji\?id=\d+\)')
+_MD_LINK_RE = re.compile(r'\[([^\]]*)\]\(([^)]+)\)')
+_HEADING_RE = re.compile(r'^[ \t]{0,3}#{1,6}[ \t]*(.+?)[ \t]*#*$', re.MULTILINE)
+_ESCAPE_RE = re.compile(r'\\([_*\[\]()~`>#+\-=|{}.!\\])')
+
+_SAFE_SCHEMES = ('http://', 'https://', 'tg://', 'mailto:', '/')
+
+
+def _clean_url(url):
+    """Unescape a MarkdownV2 URL and drop anything that isn't a safe scheme."""
+    url = url.replace('\\)', ')').replace('\\\\', '\\').strip()
+    if url.startswith(_SAFE_SCHEMES):
+        return url
+    return '#'
+
+
+def _media_chip(media_id):
+    """Placeholder for a photo that Telegram attaches to the post itself."""
+    label = f'🖼 фото {media_id}' if media_id else '🖼 фото'
+    return f'<span class="tg-post-media">{label}</span>'
+
+
+def post_markdown_to_html(text):
+    """Render post markdown as the channel shows it. Input must be HTML-escaped."""
+    protected = []
+
+    def protect(html):
+        protected.append(html)
+        return f'\x00P{len(protected) - 1}\x00'
+
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    text = _MEDIA_RE.sub(lambda m: protect(_media_chip(m.group(2))), text)
+    text = _TG_EMOJI_RE.sub(lambda m: protect(m.group(1)), text)
+    text = _MD_LINK_RE.sub(
+        lambda m: protect(
+            f'<a href="{_clean_url(m.group(2))}" target="_blank" rel="noopener">{m.group(1)}</a>'
+        ),
+        text,
+    )
+    # MarkdownV2 escapes: keep the character, lose the backslash
+    text = _ESCAPE_RE.sub(lambda m: protect(m.group(1)), text)
+
+    # Telegram has no headings — the channel shows them as bold
+    text = _HEADING_RE.sub(r'<b class="tg-post-heading">\1</b>', text)
+
+    text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)      # classic bold
+    text = re.sub(r'__([^_]+)__', r'<b>\1</b>', text)           # classic bold / v2 underline
+    text = re.sub(r'\*([^*\n]+)\*', r'<b>\1</b>', text)        # v2 bold
+    text = re.sub(r'\|\|([^|]+)\|\|',
+                  r'<span class="tg-spoiler">\1</span>', text)   # spoiler
+    text = re.sub(r'~([^~\n]+)~', r'<s>\1</s>', text)           # strikethrough
+    text = re.sub(r'(?<![\w])_([^_\n]+)_(?![\w])', r'<i>\1</i>', text)  # italic
+    text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)        # inline code
+    text = re.sub(r'^&gt;\s?(.*)$', r'<blockquote>\1</blockquote>',
+                  text, flags=re.MULTILINE)                     # blockquote
+
+    text = text.replace('\n', '<br>')
+
+    for i, html in enumerate(protected):
+        text = text.replace(f'\x00P{i}\x00', html)
+    return text
+
+
+def render_post_html(content, image=None):
+    """Render post content as the channel would show it.
+
+    Content is HTML-escaped before conversion, so the result is safe to mark_safe.
+    """
+    html = post_markdown_to_html(escape(content or ""))
+    if not html:
+        html = '<span class="tg-post-empty">Пост пустой</span>'
+    if image:
+        html = f'<img class="tg-post-image" src="{escape(image)}" alt="">' + html
+    return mark_safe(f'<div class="tg-post-card">{html}</div>')

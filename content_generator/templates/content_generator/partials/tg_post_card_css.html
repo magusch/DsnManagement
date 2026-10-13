@@ -1,0 +1,43 @@
+<style>
+    /* Telegram-like rendering of a MarkdownV2 post (see utils.render_post_html) */
+    .tg-post-card {
+        background: var(--dsn-tg-bg);
+        border: 1px solid var(--dsn-tg-border);
+        border-left: 3px solid #37aee2;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--dsn-tg-fg);
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+    .tg-post-card a { color: var(--dsn-tg-link); text-decoration: none; }
+    .tg-post-card a:hover { text-decoration: underline; }
+    .tg-post-card code {
+        background: var(--dsn-tg-code-bg);
+        border-radius: 3px;
+        padding: 1px 4px;
+        font-size: 12px;
+    }
+    .tg-post-card .tg-post-image {
+        display: block;
+        width: 100%;
+        max-width: 320px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+    }
+    .tg-post-card .tg-spoiler {
+        background: var(--dsn-tg-spoiler); color: var(--dsn-tg-spoiler); border-radius: 3px;
+    }
+    .tg-post-card .tg-post-heading { font-size: 14px; }
+    .tg-post-card .tg-post-media {
+        display: inline-block; background: var(--dsn-tg-media-bg); color: var(--dsn-tg-media-fg);
+        border: 1px dashed var(--dsn-tg-media-border); border-radius: 4px; padding: 1px 6px; font-size: 11px;
+    }
+    .tg-post-card .tg-post-empty { color: var(--dsn-c-b36b00); font-style: italic; }
+    .tg-post-card blockquote {
+        margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--dsn-tg-quote-border); color: var(--dsn-text-quiet);
+    }
+</style>

@@ -16,8 +16,8 @@
 </script>
 <style>
     .wizard-section {
-        background: #fff;
-        border: 1px solid #ddd;
+        background: var(--dsn-panel-bg);
+        border: 1px solid var(--dsn-panel-border);
         border-radius: 4px;
         padding: 20px;
         margin-bottom: 20px;
@@ -25,8 +25,8 @@
     .wizard-section h2 {
         margin-top: 0;
         padding-bottom: 10px;
-        border-bottom: 2px solid #417690;
-        color: #417690;
+        border-bottom: 2px solid var(--dsn-accent);
+        color: var(--dsn-accent);
         font-size: 16px;
     }
     .wizard-section h2 .step-num {
@@ -55,7 +55,7 @@
     }
     .filter-row select, .filter-row input {
         padding: 6px 10px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--dsn-input-border);
         border-radius: 4px;
     }
     .btn {
@@ -84,27 +84,27 @@
     }
     #events-container th, #events-container td {
         padding: 6px 10px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--dsn-line);
         text-align: left;
         font-size: 13px;
     }
     #events-container th {
-        background: #f8f8f8;
+        background: var(--dsn-subtle-bg);
         font-weight: bold;
         position: sticky;
         top: 0;
         z-index: 1;
     }
     #events-container tbody tr { cursor: pointer; transition: background-color 0.1s; }
-    #events-container tr:hover { background: #f5f9fc; }
+    #events-container tr:hover { background: var(--dsn-wizard-row-hover); }
     #events-container tr.unchecked { opacity: 0.4; }
-    #events-container tr.selected-row { background-color: #fffde7; }
-    #events-container tr.selected-row:hover { background-color: #fff9c4; }
+    #events-container tr.selected-row { background-color: var(--dsn-row-selected); }
+    #events-container tr.selected-row:hover { background-color: var(--dsn-row-selected-hover); }
 
     .events-wrapper {
         max-height: 500px;
         overflow-y: auto;
-        border: 1px solid #eee;
+        border: 1px solid var(--dsn-line);
         border-radius: 4px;
     }
 
@@ -114,9 +114,9 @@
         align-items: center;
         padding: 8px 0;
         font-size: 13px;
-        color: #666;
+        color: var(--dsn-text-muted);
     }
-    .counter-bar .count { font-weight: bold; color: #417690; }
+    .counter-bar .count { font-weight: bold; color: var(--dsn-accent); }
 
     .generate-row {
         display: flex;
@@ -136,8 +136,8 @@
         min-height: 60px;
     }
     #post-preview .post-content {
-        background: #f8f9fa;
-        border: 1px solid #ddd;
+        background: var(--dsn-code-bg);
+        border: 1px solid var(--dsn-panel-border);
         border-radius: 4px;
         padding: 16px;
         white-space: pre-wrap;
@@ -152,7 +152,7 @@
         font-family: monospace;
         font-size: 13px;
         padding: 12px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--dsn-panel-border);
         border-radius: 4px;
         resize: vertical;
     }
@@ -168,9 +168,9 @@
     .info-badge.info { background: #17a2b8; }
 
     .error-msg {
-        color: #dc3545;
+        color: var(--dsn-error-fg);
         padding: 10px;
-        background: #f8d7da;
+        background: var(--dsn-error-bg);
         border-radius: 4px;
     }
 
@@ -184,8 +184,8 @@
         display: inline-block;
         width: 16px;
         height: 16px;
-        border: 2px solid #ccc;
-        border-top-color: #417690;
+        border: 2px solid var(--dsn-input-border);
+        border-top-color: var(--dsn-accent);
         border-radius: 50%;
         animation: spin 0.6s linear infinite;
         vertical-align: middle;
@@ -196,7 +196,7 @@
     .select-tools { display: flex; gap: 6px; }
     .select-tools a {
         font-size: 12px;
-        color: #417690;
+        color: var(--dsn-accent);
         cursor: pointer;
         text-decoration: underline;
     }
@@ -236,7 +236,7 @@
     <div class="wizard-section" id="step-events">
         <h2><span class="step-num">2</span> Подборка мероприятий</h2>
         <div id="events-container">
-            <p style="color: #999;">Сначала примените фильтр, чтобы загрузить мероприятия.</p>
+            <p style="color: var(--dsn-text-faint);">Сначала примените фильтр, чтобы загрузить мероприятия.</p>
         </div>
     </div>
 
@@ -252,7 +252,7 @@
                         <option value="{{ t.id }}">{{ t.name }}</option>
                     {% endfor %}
                 </select>
-                <div id="template-preview" style="display:none; margin-top:6px; padding:8px; background:#f8f9fa; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:12px; white-space:pre-wrap; max-width:600px; color:#555;"></div>
+                <div id="template-preview" style="display:none; margin-top:6px; padding:8px; background:var(--dsn-code-bg); border:1px solid var(--dsn-panel-border); border-radius:4px; font-family:monospace; font-size:12px; white-space:pre-wrap; max-width:600px; color:var(--dsn-text-quiet);"></div>
             </div>
             <div class="field-group">
                 <label for="max-events">Лимит событий</label>
@@ -269,7 +269,7 @@
             </div>
         </div>
         <div id="post-preview" style="margin-top: 16px;">
-            <p style="color: #999;">Выберите мероприятия и нажмите кнопку генерации.</p>
+            <p style="color: var(--dsn-text-faint);">Выберите мероприятия и нажмите кнопку генерации.</p>
         </div>
     </div>
 
@@ -478,7 +478,7 @@
     }
 
     function setStatus(text, color) {
-        setPreview('<p style="color:' + (color || '#999') + ';"><span class="spinner"></span> ' + text + '</p>');
+        setPreview('<p style="color:' + (color || 'var(--dsn-text-faint)') + ';"><span class="spinner"></span> ' + text + '</p>');
     }
 
     function getCheckedImages() {
@@ -513,18 +513,18 @@
         if (postImage) {
             imageHtml = '<div style="margin-top:10px;">'
                 + '<label style="font-weight:bold;font-size:13px;">Обложка (коллаж):</label>'
-                + '<div style="margin-top:6px;"><img src="' + escapeHtml(postImage) + '" style="max-width:400px;max-height:300px;border-radius:4px;border:1px solid #ddd;"></div>'
+                + '<div style="margin-top:6px;"><img src="' + escapeHtml(postImage) + '" style="max-width:400px;max-height:300px;border-radius:4px;border:1px solid var(--dsn-panel-border);"></div>'
                 + '</div>';
         }
 
         var imagesInfo = mediaFiles.length > 0
             ? '<span class="info-badge info">' + mediaFiles.length + ' картинок будет прикреплено</span>'
-            : '<span style="color:#999;font-size:12px;">Нет картинок</span>';
+            : '<span style="color:var(--dsn-text-faint);font-size:12px;">Нет картинок</span>';
 
         var html = '<div style="margin-bottom:10px;">' + badge + fallbackBadge + '</div>'
             + '<div style="margin-bottom:10px;">'
             + '<label for="post-title-input" style="font-weight:bold;font-size:13px;">Заголовок поста:</label>'
-            + '<input type="text" id="post-title-input" value="' + escapeHtml(postTitle) + '" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;" placeholder="Подборка мероприятий">'
+            + '<input type="text" id="post-title-input" value="' + escapeHtml(postTitle) + '" style="width:100%;padding:6px 10px;border:1px solid var(--dsn-input-border);border-radius:4px;" placeholder="Подборка мероприятий">'
             + '</div>'
             + '<textarea id="post-content-edit">' + escapeHtml(content) + '</textarea>'
             + '<input type="hidden" id="post-event-ids" value="' + eventIds + '">'
@@ -569,20 +569,20 @@
                 } else if (data.error || data.status === 'error' || data.status === 'failed') {
                     clearInterval(interval);
                     var errMsg = data.error || data.message || 'неизвестная ошибка';
-                    setStatus('API ошибка: ' + errMsg + '. Пробую локально...', '#b36b00');
+                    setStatus('API ошибка: ' + errMsg + '. Пробую локально...', 'var(--dsn-c-b36b00)');
                     fallbackLocal(eventIds, method);
                 }
                 // else still pending — keep polling
             })
             .catch(function() {
                 clearInterval(interval);
-                setStatus('Потеряна связь с API. Пробую локально...', '#b36b00');
+                setStatus('Потеряна связь с API. Пробую локально...', 'var(--dsn-c-b36b00)');
                 fallbackLocal(eventIds, method);
             });
 
             if (elapsed >= POLL_TIMEOUT) {
                 clearInterval(interval);
-                setStatus('Таймаут ожидания API. Пробую локально...', '#b36b00');
+                setStatus('Таймаут ожидания API. Пробую локально...', 'var(--dsn-c-b36b00)');
                 fallbackLocal(eventIds, method);
             }
         }, POLL_INTERVAL);
@@ -624,7 +624,7 @@
         if (ids.length === 0) return;
         var eventIdsStr = ids.join(',');
 
-        setStatus(method === 'ai' ? 'Отправляю на ИИ...' : 'Отправляю на API...', '#333');
+        setStatus(method === 'ai' ? 'Отправляю на ИИ...' : 'Отправляю на API...', 'var(--dsn-text)');
 
         var formData = new FormData();
         formData.append('csrfmiddlewaretoken', getCsrfToken());
@@ -641,10 +641,10 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
-                setStatus('API: ' + data.error + '. Пробую локально...', '#b36b00');
+                setStatus('API: ' + data.error + '. Пробую локально...', 'var(--dsn-c-b36b00)');
                 fallbackLocal(eventIdsStr, method);
             } else if (data.task_id) {
-                setStatus('Задача отправлена. Ожидание результата...', '#333');
+                setStatus('Задача отправлена. Ожидание результата...', 'var(--dsn-text)');
                 pollTask(data.task_id, eventIdsStr, method);
             } else if (data.content !== undefined) {
                 showPostResult(data.content || '', eventIdsStr, method, false, {
@@ -658,7 +658,7 @@
         })
         .catch(function(err) {
             console.error('[CG]', err);
-            setStatus('Нет связи с сервером. Пробую локально...', '#b36b00');
+            setStatus('Нет связи с сервером. Пробую локально...', 'var(--dsn-c-b36b00)');
             fallbackLocal(eventIdsStr, method);
         });
     };

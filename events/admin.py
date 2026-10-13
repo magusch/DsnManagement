@@ -5,6 +5,19 @@ from django.utils.html import format_html
 from django.utils.http import urlencode
 from django.utils import timezone
 from django.db.models import Q, Case, When, Value, IntegerField
+from django.db.models.signals import post_save, post_delete
+
+
+SUMMARY_CACHE_KEY = 'events2post:summary'
+CATEGORY_SUMMARY_CACHE_KEY = 'events2post:category_summary:{scope}'
+CATEGORY_SUMMARY_SCOPES = ('upcoming', 'past', 'all', 'default')
+
+
+def invalidate_events2post_summary(**kwargs):
+    from django.core.cache import cache
+
+    cache.delete_many([SUMMARY_CACHE_KEY] +
+                      [CATEGORY_SUMMARY_CACHE_KEY.format(scope=s) for s in CATEGORY_SUMMARY_SCOPES])
 
 
 class Events2PostChangeList(ChangeList):
@@ -19,14 +32,18 @@ class Events2PostChangeList(ChangeList):
 
 from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post, PostingTime, Parameter, Event, Status, status_color
 
+post_save.connect(invalidate_events2post_summary, sender=Events2Post, dispatch_uid='events2post_summary_save')
+post_delete.connect(invalidate_events2post_summary, sender=Events2Post, dispatch_uid='events2post_summary_delete')
+
 
 from . import utils
 from django import forms
 from .widgets import PlaceAutocompleteWidget
+from .helper.colors import css_color
 
 
 def open_url(obj):
-    return format_html("<a href='%s' target='_blank'>%s</a>" % (obj.url, obj.url))
+    return format_html("<a href='{}' target='_blank'>{}</a>", obj.url, obj.url)
 
 
 open_url.short_description = "URL"
@@ -77,6 +94,9 @@ class SourceFilter(admin.SimpleListFilter):
         'kassir': ('Kassir', 'KASSIR-'),
         'cfg': ('Cfg', 'CFG-'),
         'afisha': ('Afisha', 'AFISHA-'),
+        'yandex': ('Yandex', 'YA-'),
+        'tripster': ('Tripster', 'TRIPSTER-'),
+        'tg': ('Telegram', 'TG-'),
     }
 
     def lookups(self, request, model_admin):
@@ -91,6 +111,9 @@ class SourceFilter(admin.SimpleListFilter):
             ('kassir', 'Kassir'),
             ('cfg', 'Cfg'),
             ('afisha', 'Afisha'),
+            ('yandex', 'Yandex'),
+            ('tripster', 'Tripster'),
+            ('tg', 'Telegram'),
             ('other', 'Other'),
         ]
 
@@ -115,6 +138,12 @@ class SourceFilter(admin.SimpleListFilter):
             return queryset.filter(event_id__startswith='CFG-')
         elif self.value() == 'afisha':
             return queryset.filter(event_id__startswith='AFISHA-')
+        elif self.value() == 'yandex':
+            return queryset.filter(event_id__startswith='YA-')
+        elif self.value() == 'tripster':
+            return queryset.filter(event_id__startswith='TRIPSTER-')
+        elif self.value() == 'tg':
+            return queryset.filter(event_id__startswith='TG-')
         elif self.value() == 'other':
             q_objects = Q()
             for key, info in self.SOURCES.items():
@@ -308,6 +337,13 @@ class Events2PostAdmin(admin.ModelAdmin):
     def get_changelist(self, request, **kwargs):
         return Events2PostChangeList
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "main_category":
+            # Evaluate choices once: otherwise every list_editable row re-queries categories.
+            formfield.choices = list(formfield.choices)
+        return formfield
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         if 'object_id' in request.resolver_match.kwargs:
@@ -326,19 +362,21 @@ class Events2PostAdmin(admin.ModelAdmin):
 
     CATEGORY_PARAM = 'main_category__id__exact'
 
-    # Sidebar-агрегаты сканируют всю таблицу. Кэшируем на короткий TTL, чтобы не
-    # бить по БД на каждый рендер. Кэш per-worker (LocMemCache), точной инвалидации
-    # нет — окно устаревания ограничено только этим TTL. Сам список всегда свежий.
-    SUMMARY_CACHE_TTL = 30
+    show_full_result_count = False
+
+    SUMMARY_CACHE_TTL = 120
+    SUMMARY_STATUS_KEYS = ['ReadyToPost', 'ForFuture', 'Scrape', 'Error', 'Rejected',
+                           'OnlyApi', 'Posted', 'Spam', 'Expired', 'Duplicate']
 
     def changelist_view(self, request, extra_context=None):
+        if request.method == 'POST':
+            invalidate_events2post_summary()
         extra_context = extra_context or {}
         extra_context['show_all_url'] = self._build_url(request, {'all': 'true'}, drop=['show'])
         extra_context['filter_ready_to_post_url'] = self._build_url(request, {'status__exact': 'ReadyToPost'})
         extra_context['show_upcoming_url'] = self._build_url(request, {'show': 'upcoming'}, drop=['all'])
         extra_context['show_past_url'] = self._build_url(request, {'show': 'past'}, drop=['all'])
-        extra_context['status_summary'] = self._get_status_summary()
-        extra_context['date_counts'] = self._get_date_counts()
+        extra_context['status_summary'], extra_context['date_counts'] = self._get_summary()
         extra_context['category_summary'] = self._get_category_summary(request)
         extra_context['category_clear_url'] = self._build_url(request, {}, drop=[self.CATEGORY_PARAM])
         extra_context['active_category_id'] = request.GET.get(self.CATEGORY_PARAM, '')
@@ -357,44 +395,28 @@ class Events2PostAdmin(admin.ModelAdmin):
         query_string = urlencode(query_params, doseq=True)
         return f'{base_url}?{query_string}' if query_string else base_url
 
-    def _get_status_summary(self):
+    def _get_summary(self):
+        """Status counters and upcoming/past/all counters in one query."""
         from django.db.models import Count
         from django.core.cache import cache
 
-        cache_key = 'events2post:status_summary'
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        rows = (Events2Post.objects
-                .values('status')
-                .annotate(n=Count('id'))
-                .order_by())
-        counts = {row['status']: row['n'] for row in rows}
-        ordered_keys = ['ReadyToPost', 'ForFuture', 'Scrape', 'Error', 'Rejected',
-                        'OnlyApi', 'Posted', 'Spam', 'Expired', 'Duplicate']
-        result = [(key, counts.get(key, 0), status_color.get(key, 'gray'))
-                  for key in ordered_keys if counts.get(key, 0) > 0]
-        cache.set(cache_key, result, self.SUMMARY_CACHE_TTL)
-        return result
-
-    def _get_date_counts(self):
-        from django.db.models import Count
-        from django.core.cache import cache
-
-        cache_key = 'events2post:date_counts'
-        cached = cache.get(cache_key)
+        cached = cache.get(SUMMARY_CACHE_KEY)
         if cached is not None:
             return cached
 
         now = timezone.now()
-        result = Events2Post.objects.aggregate(
+        row = Events2Post.objects.aggregate(
+            **{f'status_{key}': Count('id', filter=Q(status=key)) for key in self.SUMMARY_STATUS_KEYS},
             # upcoming должен совпадать с тем, что показывает get_queryset(show=upcoming)
             upcoming=Count('id', filter=Q(to_date__gte=now, status__in=self.UPCOMING_STATUSES)),
             past=Count('id', filter=Q(to_date__lt=now)),
             all=Count('id'),
         )
-        cache.set(cache_key, result, self.SUMMARY_CACHE_TTL)
+        status_summary = [(key, row[f'status_{key}'], css_color(status_color.get(key, 'gray')))
+                          for key in self.SUMMARY_STATUS_KEYS if row[f'status_{key}'] > 0]
+        date_counts = {key: row[key] for key in ('upcoming', 'past', 'all')}
+        result = (status_summary, date_counts)
+        cache.set(SUMMARY_CACHE_KEY, result, self.SUMMARY_CACHE_TTL)
         return result
 
     def _base_queryset_for_date_filter(self, request):
@@ -415,8 +437,12 @@ class Events2PostAdmin(admin.ModelAdmin):
         from django.core.cache import cache
 
         # Scope зависит от show/all — включаем его в ключ, чтобы не смешивать срезы.
-        scope = request.GET.get('show') or ('all' if request.GET.get('all') == 'true' else 'default')
-        cache_key = f'events2post:category_summary:{scope}'
+        show = request.GET.get('show')
+        if show in ('upcoming', 'past'):
+            scope = show
+        else:
+            scope = 'all' if request.GET.get('all') == 'true' else 'default'
+        cache_key = CATEGORY_SUMMARY_CACHE_KEY.format(scope=scope)
 
         counts = cache.get(cache_key)
         if counts is None:
@@ -647,9 +673,9 @@ weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 class PostingTimesAdmin(admin.ModelAdmin):
 
-    list_filter = ["start_weekday"]
-    ordering = ["start_weekday", "posting_time_hours"]
-    list_editable = ["posting_time",]
+    list_filter = ["kind", "start_weekday"]
+    ordering = ["start_weekday", "posting_time"]
+    list_editable = ["posting_time", "kind"]
 
     def weekdays(self):
         if (0 <= self.start_weekday < 7) & (0 <= self.end_weekday < 7):
@@ -657,10 +683,7 @@ class PostingTimesAdmin(admin.ModelAdmin):
         if self.start_weekday < 0:  # we can add special postingtime for special date
             return f"day – {self.start_weekday*-1}"
 
-    def timepost(self):
-        return f"{self.posting_time_hours}:{self.posting_time_minutes:02}"
-
-    list_display = [weekdays, timepost, "posting_time", ]
+    list_display = ["id", weekdays, "posting_time", "kind"]
 
 
 class ParametersAdmin(admin.ModelAdmin):

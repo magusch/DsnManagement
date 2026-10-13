@@ -1,0 +1,79 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% include "content_generator/partials/tg_post_card_css.html" %}
+    <style>
+        /* Toolbar counters — same idea as the Events2Post status chips */
+        .dsn-slot-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+        .dsn-slot-chip { display: inline-block; padding: 2px 10px; border: 1px solid var(--dsn-chip-border);
+                         border-radius: 12px; background: var(--dsn-chip-bg); font-size: 12px;
+                         text-decoration: none; white-space: nowrap; }
+        .dsn-slot-chip:hover { background: var(--dsn-chip-hover-bg); }
+        .dsn-slot-chip b { font-weight: 600; margin-left: 3px; }
+        .dsn-slot-chip-active { background: var(--dsn-chip-active-bg); color: #fff !important; border-color: var(--dsn-chip-active-bg); }
+        .dsn-slot-note { font-size: 11px; color: var(--dsn-text-quieter); margin-top: 2px; }
+
+        /* Table: readable rows, header stays put while scrolling a long schedule */
+        #result_list thead th { position: sticky; top: 0; background: var(--body-bg); z-index: 2; }
+        #result_list td, #result_list th { vertical-align: top; }
+        #result_list tbody tr:hover { background-color: var(--dsn-row-hover); }
+        #result_list td.field-post_link { min-width: 180px; }
+        #result_list td.field-theme, #result_list td.field-slot_state { white-space: nowrap; }
+        #result_list td.field-events_count { text-align: center; }
+
+        /* Preview: three lines by default, full post on demand */
+        #result_list td.field-post_preview { width: 380px; min-width: 300px; padding: 8px; }
+        #result_list td.field-post_preview .tg-post-card {
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+            overflow: hidden; margin: 0;
+        }
+        #result_list td.field-post_preview .tg-post-card .tg-post-image { display: none; }
+        #result_list td.field-post_preview .tg-post-cell.expanded .tg-post-card {
+            display: block; overflow-y: auto; max-height: 420px;
+        }
+        #result_list td.field-post_preview .tg-post-cell.expanded .tg-post-card .tg-post-image {
+            display: block;
+        }
+        .tg-post-toggle { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--dsn-accent);
+                          background: none; border: none; padding: 0; cursor: pointer; }
+        .tg-post-toggle:hover { text-decoration: underline; }
+    </style>
+    <script>
+    (function() {
+        function init() {
+            document.querySelectorAll('.tg-post-toggle').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var cell = btn.closest('.tg-post-cell');
+                    if (!cell) return;
+                    var expanded = cell.classList.toggle('expanded');
+                    btn.textContent = expanded ? 'Свернуть' : 'Развернуть';
+                });
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+{% endblock %}
+
+{% block object-tools %}
+    <div style="margin: 6px 0;">
+        {% include "events/partials/fill_posting_time_button.html" with kind="digest" field="scheduled_time" label="Расставить время дайджестов" %}
+    </div>
+    {% if slot_summary %}
+        <div class="dsn-slot-chips">
+            {% for chip in slot_summary %}
+                <a class="dsn-slot-chip{% if chip.active %} dsn-slot-chip-active{% endif %}"
+                   href="{{ chip.url }}" style="{% if not chip.active %}color: {{ chip.color }};{% endif %}">
+                    {{ chip.label }} <b>{{ chip.count }}</b>
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}

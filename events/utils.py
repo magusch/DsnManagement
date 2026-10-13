@@ -34,28 +34,23 @@ def parse_price_int(price_text):
         return int(numbers[0])
     return None
 
-current_tz = timezone.get_current_timezone()
-
-current_tz_int = timezone.now().astimezone(current_tz).hour - timezone.now().hour
-
-if current_tz_int < 0:
-    current_tz_int = 24 + current_tz_int
-
 def _is_weekday(dt: datetime.datetime) -> bool:
     return dt.weekday() in [0, 1, 2, 3, 4]
 
 
 def _days_posting_times(time_point: datetime) -> Generator[None, List[datetime.datetime], None]:
     weekday = (
-        PostingTime.objects.filter(start_weekday__lte=0)
+        PostingTime.objects.filter(kind=PostingTime.KIND_EVENT)
+        .filter(start_weekday__lte=0)
         .filter(end_weekday__gte=4)
-        .order_by("posting_time__hour")
+        .order_by("posting_time")
         .first()
     )
     weekend = (
-        PostingTime.objects.filter(start_weekday__lte=5)
+        PostingTime.objects.filter(kind=PostingTime.KIND_EVENT)
+        .filter(start_weekday__lte=5)
         .filter(end_weekday__gte=6)
-        .order_by("posting_time__hour")
+        .order_by("posting_time")
         .first()
     )
 
@@ -94,6 +89,8 @@ def refresh_posting_time(self, request, queryset):
     ----------
     queryset : list
         список с записями в таблице.
+
+    Returns the events whose post_date was set.
     """
     try:
         body = request.body.decode('utf-8') if isinstance(request.body, bytes) else request.body
@@ -103,6 +100,7 @@ def refresh_posting_time(self, request, queryset):
 
     times = _postin_times(last_date)
 
+    updated = []
     for event in queryset:
         # if event.post_date is None:
         #     pass
@@ -122,8 +120,13 @@ def refresh_posting_time(self, request, queryset):
             last_post_time = last_post.post_date
 
         post_time = good_post_time(last_post_time)
+        if post_time is None:  # no active event slots — keep the dates as they are
+            break
         event.post_date = post_time
         event.save()
+        updated.append(event)
+
+    return updated
 
 
 # Order by queue and change post_time in this order
@@ -281,57 +284,43 @@ def move_event_to_site(events_model):
     return event_count
 
 
+def _slot_at(day, slot):
+    """Aware datetime for a PostingTime slot (stored in local time) on a local date."""
+    return timezone.make_aware(datetime.datetime.combine(day, slot.posting_time))
+
+
+def next_slot(after, kind=PostingTime.KIND_EVENT, max_days=14):
+    """First slot of the given kind strictly later than `after`."""
+    local_after = timezone.localtime(after)
+    day = local_after.date()
+    for shift in range(max_days + 1):
+        slots = PostingTime.objects.filter(
+            kind=kind,
+            start_weekday__lte=day.weekday(),
+            end_weekday__gte=day.weekday(),
+        )
+        if shift == 0:
+            slots = slots.filter(posting_time__gt=local_after.time())
+        slot = slots.order_by("posting_time").first()
+        if slot:
+            return _slot_at(day, slot)
+        day += datetime.timedelta(days=1)
+    return None
+
+
 def good_post_time(last_post_time):
     if last_post_time <= timezone.now():
         last_post_time = timezone.now()
-    post_time_query_first = (
-        PostingTime.objects.filter(start_weekday__lte=last_post_time.weekday())
-        .filter(end_weekday__gte=last_post_time.weekday())
-        .filter(posting_time__hour__gte=last_post_time.hour + current_tz_int + 1)
-        .order_by('posting_time__hour').first()
-    )
-    if post_time_query_first:
-        post_time = last_post_time.replace(
-            hour=post_time_query_first.posting_time.hour - current_tz_int,
-            minute=post_time_query_first.posting_time.minute,
-            second=0,
-            microsecond=0,
-        )
-    else:
-        next_day = last_post_time + timezone.timedelta(days=1)
-        post_time = (
-            PostingTime.objects.filter(start_weekday__lte=next_day.weekday())
-            .filter(end_weekday__gte=next_day.weekday())
-            .order_by("posting_time__hour")
-            .first()
-        )
-        post_time = next_day.replace(
-            hour=post_time.posting_time.hour - current_tz_int,
-            minute=post_time.posting_time.minute,
-            second=0,
-            microsecond=0,
-        )
-    return post_time
+    return next_slot(last_post_time)
 
 
 # take posting time for last event
 
 
 def empty_queryset():
-    today = timezone.now() + timezone.timedelta(days=1)
-    post_time = (
-        PostingTime.objects.filter(start_weekday__lte=today.weekday())
-        .filter(end_weekday__gte=today.weekday())
-        .order_by("posting_time_hours")
-        .first()
-    )
-    post_time = today.replace(
-        hour=post_time.posting_time_hours,
-        minute=post_time.posting_time_minutes,
-        second=0,
-        microsecond=0,
-    )
-    return post_time
+    tomorrow = timezone.localtime() + timezone.timedelta(days=1)
+    start_of_tomorrow = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+    return next_slot(start_of_tomorrow - timezone.timedelta(microseconds=1))
 
 
 def delete_old_events(Events_model):

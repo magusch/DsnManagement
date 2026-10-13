@@ -1,0 +1,9 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% include "content_generator/partials/tg_post_card_css.html" %}
+    <style>
+        .tg-post-card { max-width: 420px; }
+    </style>
+{% endblock %}

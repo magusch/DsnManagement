@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='placeschedule',
             constraint=models.CheckConstraint(
-                check=models.Q(models.Q(('schedule_type', 'std'), ('date__isnull', True), ('weekday__isnull', False)),
+                condition=models.Q(models.Q(('schedule_type', 'std'), ('date__isnull', True), ('weekday__isnull', False)),
                                models.Q(('schedule_type', 'spl'), ('date__isnull', False), ('weekday__isnull', True)),
                                models.Q(('schedule_type', 'hol'), ('weekday__isnull', True)), _connector='OR'),
                 name='valid_schedule_type_constraint'),

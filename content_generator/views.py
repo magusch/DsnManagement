@@ -208,14 +208,8 @@ def generate_post_api_view(request):
     return _api_result_to_response(result, event_ids)
 
 
-@staff_member_required
-@require_POST
-def check_task_view(request):
-    """Poll channel API for async task status."""
-    task_id = request.POST.get("task_id", "")
-    if not task_id:
-        return JsonResponse({"error": "No task_id"}, status=400)
-
+def _poll_task(task_id):
+    """Fetch async task status from channel API. Returns (result, error)."""
     data = {
         "api_url": f"api/status/{task_id}",
         "method": "GET",
@@ -225,17 +219,117 @@ def check_task_view(request):
     response, error = channel_api_request(data)
     if error:
         logger.warning("[POLL] task=%s error: %s", task_id, error)
-        return JsonResponse({"error": error}, status=502)
+        return None, error
 
     try:
         result = response.json()
     except Exception:
-        return JsonResponse({"error": "Невалидный ответ"}, status=502)
+        return None, "Невалидный ответ"
 
     status = result.get("status", "?") if isinstance(result, dict) else "?"
     if status not in ("pending", "processing"):
         logger.info("[POLL] task=%s status=%s", task_id, status)
+    return result, None
+
+
+@staff_member_required
+@require_POST
+def check_task_view(request):
+    """Poll channel API for async task status."""
+    task_id = request.POST.get("task_id", "")
+    if not task_id:
+        return JsonResponse({"error": "No task_id"}, status=400)
+
+    result, error = _poll_task(task_id)
+    if error:
+        return JsonResponse({"error": error}, status=502)
     return JsonResponse(result)
+
+
+@staff_member_required
+@require_POST
+def theme_post_view(request):
+    """Ask the channel API to build a themed digest post.
+
+    POST filter_set_id (optional — API picks the least-recently-posted active
+    theme when empty) and dry_run=1 to only render the post without saving.
+    """
+    from .utils import theme_post_api
+
+    filter_set_id = request.POST.get("filter_set_id") or None
+    dry_run = request.POST.get("dry_run") == "1"
+
+    if filter_set_id:
+        try:
+            filter_set_id = int(filter_set_id)
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "Некорректный набор фильтров"}, status=400)
+
+    logger.info("[THEME] filter_set_id=%s dry_run=%s", filter_set_id, dry_run)
+
+    result, error = theme_post_api(filter_set_id, dry_run)
+    if error:
+        return JsonResponse({"error": f"Ошибка API: {error}"}, status=502)
+
+    task_id = result.get("task_id") if isinstance(result, dict) else None
+    if task_id:
+        return JsonResponse({"status": "pending", "task_id": task_id, "dry_run": dry_run})
+
+    return JsonResponse(_theme_post_payload(result, dry_run))
+
+
+@staff_member_required
+@require_POST
+def theme_post_status_view(request):
+    """Poll a themed-post task and render its content as channel HTML."""
+    task_id = request.POST.get("task_id", "")
+    if not task_id:
+        return JsonResponse({"error": "No task_id"}, status=400)
+
+    dry_run = request.POST.get("dry_run") == "1"
+
+    result, error = _poll_task(task_id)
+    if error:
+        return JsonResponse({"error": error}, status=502)
+
+    status = result.get("status") if isinstance(result, dict) else None
+    if status in ("pending", "processing", "PENDING", "STARTED", "RETRY"):
+        return JsonResponse({"status": "pending"})
+
+    return JsonResponse(_theme_post_payload(result, dry_run))
+
+
+def _theme_post_payload(result, dry_run):
+    """Normalize an API/task result into {status, content, content_html, ...}."""
+    from .utils import render_post_html
+
+    if not isinstance(result, dict):
+        return {"status": "success", "content": str(result), "dry_run": dry_run}
+
+    if result.get("status") in ("error", "failed", "FAILURE"):
+        return {"error": result.get("error") or result.get("message") or "Задача завершилась с ошибкой"}
+
+    inner = result.get("result")
+    data = inner if isinstance(inner, dict) else result
+
+    content = data.get("content") or data.get("post") or ""
+    image = data.get("image") or ""
+    post_id = data.get("id") or data.get("post_id")
+
+    payload = {
+        "status": "success",
+        "dry_run": dry_run,
+        "content": content,
+        "content_html": str(render_post_html(content, image)) if content else "",
+        "title": data.get("title") or "",
+        "image": image,
+        "theme": data.get("theme") or data.get("filter_set") or "",
+    }
+    if post_id:
+        payload["post_id"] = post_id
+    if not content:
+        payload["message"] = data.get("message") or "API не вернул текст поста"
+    return payload
 
 
 @staff_member_required

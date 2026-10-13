@@ -2,8 +2,201 @@
 
 {% block title %}{{ title }} | {{ site_title|default:_('DSN admin') }}{% endblock %}
 
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* DSN colors for custom admin pages. Light values are exactly the original colors; dark values
+       follow Django admin's theme (OS setting or the theme toggle), same selectors as admin/css/dark_mode.css. */
+    html[data-theme="light"], :root {
+        --dsn-row-hover: #f0f4f8;
+        --dsn-row-selected: #fffde7;
+        --dsn-row-selected-hover: #fff9c4;
+        --dsn-row-changed: #e8f5e9;
+        --dsn-chip-bg: #f4f6f8;
+        --dsn-chip-hover-bg: #e3e8ee;
+        --dsn-chip-fg: #2c3e50;
+        --dsn-chip-border: #c8d1d9;
+        --dsn-chip-active-bg: #2c3e50;
+        --dsn-chip-active-hover-bg: #1a252f;
+        --dsn-text: #333;
+        --dsn-text-quiet: #555;
+        --dsn-text-muted: #666;
+        --dsn-text-soft: #777;
+        --dsn-text-quieter: #888;
+        --dsn-text-faint: #999;
+        --dsn-accent: #417690;
+        --dsn-panel-bg: #fff;
+        --dsn-panel-border: #ddd;
+        --dsn-input-border: #ccc;
+        --dsn-line: #eee;
+        --dsn-subtle-bg: #f8f8f8;
+        --dsn-code-bg: #f8f9fa;
+        --dsn-pre-bg: #f6f6f6;
+        --dsn-card-border: #e0e4e8;
+        --dsn-wizard-row-hover: #f5f9fc;
+        --dsn-error-fg: #dc3545;
+        --dsn-error-bg: #f8d7da;
+        --dsn-error-border: #f5c6cb;
+        --dsn-error-strong: #721c24;
+        --dsn-success-bg: #d4edda;
+        --dsn-success-border: #c3e6cb;
+        --dsn-success-fg: #155724;
+        --dsn-tg-bg: #fff;
+        --dsn-tg-border: #dfe4ea;
+        --dsn-tg-fg: #222;
+        --dsn-tg-link: #168acd;
+        --dsn-tg-code-bg: #f1f3f5;
+        --dsn-tg-spoiler: #ccc;
+        --dsn-tg-media-bg: #eef3f7;
+        --dsn-tg-media-fg: #55708a;
+        --dsn-tg-media-border: #b8ccdd;
+        --dsn-tg-quote-border: #c9d6e0;
+        --dsn-c-green: green;
+        --dsn-c-red: red;
+        --dsn-c-blue: blue;
+        --dsn-c-purple: purple;
+        --dsn-c-orange: orange;
+        --dsn-c-gray: gray;
+        --dsn-c-black: black;
+        --dsn-c-007bff: #007bff;
+        --dsn-c-17a2b8: #17a2b8;
+        --dsn-c-2f7d32: #2f7d32;
+        --dsn-c-b36b00: #b36b00;
+        --dsn-c-ba2121: #ba2121;
+        --dsn-c-555: #555;
+        --dsn-c-2c3e50: #2c3e50;
+        --dsn-c-666: #666;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --dsn-row-hover: #1e2a33;
+            --dsn-row-selected: #00363a;
+            --dsn-row-selected-hover: #004a50;
+            --dsn-row-changed: #1b3a24;
+            --dsn-chip-bg: #1e252b;
+            --dsn-chip-hover-bg: #2a333b;
+            --dsn-chip-fg: #d0d7de;
+            --dsn-chip-border: #3a4550;
+            --dsn-chip-active-bg: #417690;
+            --dsn-chip-active-hover-bg: #4f8aa6;
+            --dsn-text: #e0e0e0;
+            --dsn-text-quiet: #b0b0b0;
+            --dsn-text-muted: #a8a8a8;
+            --dsn-text-soft: #9a9a9a;
+            --dsn-text-quieter: #8a8a8a;
+            --dsn-text-faint: #8a8a8a;
+            --dsn-accent: #81d4fa;
+            --dsn-panel-bg: #1a1a1a;
+            --dsn-panel-border: #353535;
+            --dsn-input-border: #4a4a4a;
+            --dsn-line: #2a2a2a;
+            --dsn-subtle-bg: #212121;
+            --dsn-code-bg: #1b1f23;
+            --dsn-pre-bg: #1b1f23;
+            --dsn-card-border: #353535;
+            --dsn-wizard-row-hover: #1e2a33;
+            --dsn-error-fg: #ff8a95;
+            --dsn-error-bg: #3d1a1e;
+            --dsn-error-border: #6b2a31;
+            --dsn-error-strong: #ffb3b8;
+            --dsn-success-bg: #16331f;
+            --dsn-success-border: #2c5e3a;
+            --dsn-success-fg: #8fdca4;
+            --dsn-tg-bg: #17212b;
+            --dsn-tg-border: #2b3a4a;
+            --dsn-tg-fg: #e4ecf2;
+            --dsn-tg-link: #6ab3f3;
+            --dsn-tg-code-bg: #232e3c;
+            --dsn-tg-spoiler: #3a4a5a;
+            --dsn-tg-media-bg: #232e3c;
+            --dsn-tg-media-fg: #8fa9c2;
+            --dsn-tg-media-border: #3a4a5a;
+            --dsn-tg-quote-border: #3a5068;
+            --dsn-c-green: #5cc96b;
+            --dsn-c-red: #ff6b6b;
+            --dsn-c-blue: #6ea8fe;
+            --dsn-c-purple: #c58af9;
+            --dsn-c-orange: #ffa94d;
+            --dsn-c-gray: #a0a0a0;
+            --dsn-c-black: #e0e0e0;
+            --dsn-c-007bff: #6ea8fe;
+            --dsn-c-17a2b8: #4dd4e8;
+            --dsn-c-2f7d32: #6fcf75;
+            --dsn-c-b36b00: #f0a830;
+            --dsn-c-ba2121: #ff7070;
+            --dsn-c-555: #b0b0b0;
+            --dsn-c-2c3e50: #d0d7de;
+            --dsn-c-666: #a8a8a8;
+        }
+    }
+    html[data-theme="dark"] {
+        --dsn-row-hover: #1e2a33;
+        --dsn-row-selected: #00363a;
+        --dsn-row-selected-hover: #004a50;
+        --dsn-row-changed: #1b3a24;
+        --dsn-chip-bg: #1e252b;
+        --dsn-chip-hover-bg: #2a333b;
+        --dsn-chip-fg: #d0d7de;
+        --dsn-chip-border: #3a4550;
+        --dsn-chip-active-bg: #417690;
+        --dsn-chip-active-hover-bg: #4f8aa6;
+        --dsn-text: #e0e0e0;
+        --dsn-text-quiet: #b0b0b0;
+        --dsn-text-muted: #a8a8a8;
+        --dsn-text-soft: #9a9a9a;
+        --dsn-text-quieter: #8a8a8a;
+        --dsn-text-faint: #8a8a8a;
+        --dsn-accent: #81d4fa;
+        --dsn-panel-bg: #1a1a1a;
+        --dsn-panel-border: #353535;
+        --dsn-input-border: #4a4a4a;
+        --dsn-line: #2a2a2a;
+        --dsn-subtle-bg: #212121;
+        --dsn-code-bg: #1b1f23;
+        --dsn-pre-bg: #1b1f23;
+        --dsn-card-border: #353535;
+        --dsn-wizard-row-hover: #1e2a33;
+        --dsn-error-fg: #ff8a95;
+        --dsn-error-bg: #3d1a1e;
+        --dsn-error-border: #6b2a31;
+        --dsn-error-strong: #ffb3b8;
+        --dsn-success-bg: #16331f;
+        --dsn-success-border: #2c5e3a;
+        --dsn-success-fg: #8fdca4;
+        --dsn-tg-bg: #17212b;
+        --dsn-tg-border: #2b3a4a;
+        --dsn-tg-fg: #e4ecf2;
+        --dsn-tg-link: #6ab3f3;
+        --dsn-tg-code-bg: #232e3c;
+        --dsn-tg-spoiler: #3a4a5a;
+        --dsn-tg-media-bg: #232e3c;
+        --dsn-tg-media-fg: #8fa9c2;
+        --dsn-tg-media-border: #3a4a5a;
+        --dsn-tg-quote-border: #3a5068;
+        --dsn-c-green: #5cc96b;
+        --dsn-c-red: #ff6b6b;
+        --dsn-c-blue: #6ea8fe;
+        --dsn-c-purple: #c58af9;
+        --dsn-c-orange: #ffa94d;
+        --dsn-c-gray: #a0a0a0;
+        --dsn-c-black: #e0e0e0;
+        --dsn-c-007bff: #6ea8fe;
+        --dsn-c-17a2b8: #4dd4e8;
+        --dsn-c-2f7d32: #6fcf75;
+        --dsn-c-b36b00: #f0a830;
+        --dsn-c-ba2121: #ff7070;
+        --dsn-c-555: #b0b0b0;
+        --dsn-c-2c3e50: #d0d7de;
+        --dsn-c-666: #a8a8a8;
+    }
+</style>
+{% endblock %}
+
 {% block branding %}
-<h1 id="site-name"><a href="{% url 'admin:index' %}">Давай с Нами – Админка</a></h1>
+<div id="site-name"><a href="{% url 'admin:index' %}">Давай с Нами – Админка</a></div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
 {% endblock %}
 
 {% block nav-global %}

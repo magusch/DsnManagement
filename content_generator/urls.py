@@ -7,4 +7,6 @@ urlpatterns = [
     path("generate-post/", views.generate_post_api_view, name="cg_generate_post"),
     path("check-task/", views.check_task_view, name="cg_check_task"),
     path("save-post/", views.save_post_view, name="cg_save_post"),
+    path("theme-post/", views.theme_post_view, name="cg_theme_post"),
+    path("theme-post/status/", views.theme_post_status_view, name="cg_theme_post_status"),
 ]

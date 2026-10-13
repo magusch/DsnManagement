@@ -85,7 +85,7 @@ def v2_to_html(text):
     text = re.sub(r'__([^_]+)__', r'<u>\1</u>', text)           # underline
     text = re.sub(r'~([^~]+)~', r'<s>\1</s>', text)             # strikethrough
     text = re.sub(r'\|\|([^|]+)\|\|',                            # spoiler
-                  r'<span class="tg-spoiler" style="background:#ccc;color:#ccc">\1</span>', text)
+                  r'<span class="tg-spoiler" style="background:var(--dsn-tg-spoiler, #ccc);color:var(--dsn-tg-spoiler, #ccc)">\1</span>', text)
     text = re.sub(r'\*([^*]+)\*', r'<b>\1</b>', text)           # bold
     text = re.sub(r'_([^_]+)_', r'<i>\1</i>', text)             # italic
     text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)       # inline code

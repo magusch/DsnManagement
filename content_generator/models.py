@@ -10,6 +10,7 @@ class FilterSet(models.Model):
     FILTER_TYPES = [
         ('standard', 'Стандартный'),
         ('custom', 'Пользовательский'),
+        ('semantic', 'Семантический (тема дайджеста)'),
     ]
 
     name = models.CharField(max_length=200, verbose_name='Название набора фильтров')
@@ -104,6 +105,12 @@ class GeneratedPost(models.Model):
 
     def __str__(self):
         return self.title
+
+    def markdown_post_view_model(self):
+        """Post rendered as it will look in the channel (MarkdownV2 → HTML)."""
+        from .utils import render_post_html
+
+        return render_post_html(self.content, self.image)
 
     def save(self, *args, **kwargs):
         if self.image_upload and not self.image:

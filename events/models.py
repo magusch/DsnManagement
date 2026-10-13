@@ -4,10 +4,13 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from pgvector.django import VectorField, HnswIndex
+
+from .helper.colors import css_color
 
 import random
 
@@ -74,6 +77,8 @@ class Source(models.TextChoices):
     KASSIR = 'KASSIR', 'kassir'
     CFG = 'CFG', 'config'
     AFISHA = 'AFISHA', 'afisha'
+    YANDEX = 'YA', 'yandex'
+    TRIPSTER = 'TRIPSTER', 'tripster'
     OTHER = 'OTHER', 'Other'
 
 
@@ -135,11 +140,11 @@ class EventsNotApprovedNew(models.Model):
     def from_date_color(self):
         if (self.from_date - timezone.now()).days < 3:
             return format_html(
-                f'<span style="color: Orange;">{self.from_date.ctime()}</span>'
+                '<span style="color: {};">{}</span>', css_color('Orange'), self.from_date.ctime()
             )
         else:
             return format_html(
-                f'<span style="color: Green;">{self.from_date.ctime()}</span>'
+                '<span style="color: {};">{}</span>', css_color('Green'), self.from_date.ctime()
             )
 
     def status_color(self):
@@ -147,7 +152,7 @@ class EventsNotApprovedNew(models.Model):
             status_enum = Status(self.status)
             return format_html(
             '<span style="color: {};">{}</span>',
-                status_enum.color, status_enum.label
+                css_color(status_enum.color), status_enum.label
             )
         else:
             return self.status
@@ -218,11 +223,11 @@ class EventsNotApprovedProposed(models.Model):
     def from_date_color(self):
         if (self.from_date - timezone.now()).days < 2:
             return format_html(
-                f'<span style="color: Orange;">{self.from_date.ctime()}</span>'
+                '<span style="color: {};">{}</span>', css_color('Orange'), self.from_date.ctime()
             )
         else:
             return format_html(
-                f'<span style="color: Green;">{self.from_date.ctime()}</span>'
+                '<span style="color: {};">{}</span>', css_color('Green'), self.from_date.ctime()
             )
 
     def save(self, *args, **kwargs):
@@ -334,36 +339,36 @@ class Events2Post(models.Model):  # Table events for posting
 
     def status_color(self):
         return format_html(
-            f'<span style="color: {status_color[self.status]};">{self.status}</span>'
+            '<span style="color: {};">{}</span>', css_color(status_color[self.status]), self.status
         )
 
     def from_date_color(self):
         #from_date_color_html = ""
         if self.status == 'Error':
-            from_date_color_html = f'<span style="color: Red;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Red")};">{self.from_date.ctime()}</span>'
         elif self.status == 'Rejected' or self.status == 'Duplicate':
-            from_date_color_html = f'<span style="color: Gray;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Gray")};">{self.from_date.ctime()}</span>'
         elif self.status == 'ForFuture':
-            from_date_color_html = f'<span style="color: Blue;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Blue")};">{self.from_date.ctime()}</span>'
         elif self.status == 'Posted' or self.status == 'Spam' or self.from_date < timezone.now():
-            from_date_color_html = f'<span style="color: Red;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Red")};">{self.from_date.ctime()}</span>'
         elif self.status == 'Scrape':
-            from_date_color_html = f'<span style="color: Purple;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Purple")};">{self.from_date.ctime()}</span>'
         elif (self.from_date - timezone.now()).days < 3:
-            from_date_color_html = f'<span style="color: Orange;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Orange")};">{self.from_date.ctime()}</span>'
         else:
-            from_date_color_html = f'<span style="color: Green;">{self.from_date.ctime()}</span>'
+            from_date_color_html = f'<span style="color: {css_color("Green")};">{self.from_date.ctime()}</span>'
 
         if self.is_ready is True:
             from_date_color_html += "<div style='text-align:left'>✅</div>"
 
-        return format_html(from_date_color_html)
+        return mark_safe(from_date_color_html)
 
     def markdown_post_view_model(self):
         from events.helper.markdown_v2 import v2_to_html
-        html_image = f"<div id='markdown_post' style='width:325px;'><img src='{self.image}' width='325px'>"
+        html_image = format_html("<div id='markdown_post' style='width:325px;'><img src='{}' width='325px'>", self.image)
         html_post = v2_to_html(self.post)
-        return format_html(html_image + html_post + '</div>')
+        return mark_safe(html_image + html_post + '</div>')
 
     def address_markdown(self):
         return self.place.markdown_address()
@@ -391,7 +396,7 @@ class Events2Post(models.Model):  # Table events for posting
 
     def post_check_html(self):
         checker = PostChecker(self)
-        return format_html(checker.icons_html()) if checker.errors else ''
+        return mark_safe(checker.icons_html()) if checker.errors else ''
     post_check_html.short_description = 'Issues'
 
 
@@ -412,20 +417,25 @@ weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 class PostingTime(models.Model):
+    KIND_EVENT = "event"
+    KIND_DIGEST = "digest"
+    KIND_INACTIVE = "inactive"
+    KIND_CHOICES = [
+        (KIND_EVENT, "Мероприятие"),
+        (KIND_DIGEST, "Дайджест"),
+        (KIND_INACTIVE, "Выключен"),
+    ]
+
     start_weekday = models.IntegerField(default=4)
     end_weekday = models.IntegerField(default=6)
-    posting_time_hours = models.IntegerField(default=13)
-    posting_time_minutes = models.IntegerField(default=20)
-    posting_time = models.TimeField(null=True)
+    posting_time = models.TimeField()
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_EVENT)
 
     def __str__(self):
+        time = self.posting_time.strftime("%H:%M")
         if (0 <= self.start_weekday < 7) & (0 <= self.end_weekday < 7):
-            posting = (
-                f"{weekdays[self.start_weekday]}-{weekdays[self.end_weekday]} "
-                f"{self.posting_time_hours}:{self.posting_time_minutes:02}"
-            )
-            return posting
-        return f"{self.posting_time_hours}:{self.posting_time_minutes}"
+            return f"{weekdays[self.start_weekday]}-{weekdays[self.end_weekday]} {time} ({self.kind})"
+        return f"{time} ({self.kind})"
 
 
 class Parameter(models.Model):  # Table events for posting
