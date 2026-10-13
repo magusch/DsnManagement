@@ -31,8 +31,11 @@ class FilterSetAdmin(CityScopedAdmin, admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
     def apply_filter(self, request, queryset):
+        city = self.collection_city(request)
+        if city is None:
+            return
         ids = list(queryset.values_list('id', flat=True))
-        answer = utils.event_selection_by_filter_id(ids)
+        answer = utils.event_selection_by_filter_id(ids, city)
         if answer:
             self.message_user(
                 request,

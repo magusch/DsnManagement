@@ -282,9 +282,14 @@ def theme_post_view(request):
         except (TypeError, ValueError):
             return JsonResponse({"error": "Некорректный набор фильтров"}, status=400)
 
-    logger.info("[THEME] filter_set_id=%s dry_run=%s", filter_set_id, dry_run)
+    city = _filter_city(request)
+    if city is None:
+        return JsonResponse({"error": "Выберите город в шапке: тематический пост собирается для одного канала"},
+                            status=400)
 
-    result, error = theme_post_api(filter_set_id, dry_run)
+    logger.info("[THEME] city=%s filter_set_id=%s dry_run=%s", city, filter_set_id, dry_run)
+
+    result, error = theme_post_api(city, filter_set_id, dry_run)
     if error:
         return JsonResponse({"error": f"Ошибка API: {error}"}, status=502)
 

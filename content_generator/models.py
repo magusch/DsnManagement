@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from city.models import City, city_field, city_not_all_constraint
+from city.models import City, city_field
 from events.models import Events2Post
 
 from django.utils import timezone
@@ -54,7 +54,6 @@ class EventSelection(models.Model):
     city = city_field()
 
     class Meta:
-        constraints = [city_not_all_constraint()]
         verbose_name = 'Подборка мероприятий'
         verbose_name_plural = 'Подборки мероприятий'
 
@@ -106,7 +105,6 @@ class GeneratedPost(models.Model):
     city = city_field()
 
     class Meta:
-        constraints = [city_not_all_constraint()]
         verbose_name = 'Сгенерированный пост'
         verbose_name_plural = 'Сгенерированные посты'
 
@@ -154,7 +152,6 @@ class PostingSchedule(models.Model):
     city = city_field()
 
     class Meta:
-        constraints = [city_not_all_constraint()]
         verbose_name = 'Расписание постинга'
         verbose_name_plural = 'Расписание постинга'
         ordering = ['scheduled_time']

@@ -6,9 +6,7 @@ from .datetime_helper import weekday_name, month_name
 from .markdown_v2 import escape_v2, escape_v2_url
 
 from category.models import SubCategory
-from city.models import City, get_city
-
-import pytz
+from city.models import City, city_timezone, get_city
 
 from datetime import datetime
 
@@ -19,12 +17,12 @@ EXHIBITION_MIN_DAYS = 8
 
 class PostHelper:
     def __init__(self, event):
-        self.TIMEZONE = pytz.timezone("Europe/Moscow")
         if type(event) == dict:
             event = DictAsMethods(event)
         self.event = event
         # Dict events and old rows may have no city — they are SPb.
         self.city_id = getattr(event, 'city_id', None) or City.SPB
+        self.TIMEZONE = city_timezone(self.city_id)
         self.dates_to_right_tz()
 
         from .load_parameters import ParametersManager
@@ -120,7 +118,7 @@ class PostHelper:
 
         address_line = self.address_markdown()
 
-        footer_link = self.param_manager.get_parameter('finish_link')
+        footer_link = self.param_manager.get_parameter('finish_link', self.city_id)
         if not footer_link:
             footer_link = ''
         else:
@@ -159,7 +157,7 @@ class PostHelper:
     def address_markdown(self):
         address_line = None
 
-        need_address_line_url = self.param_manager.get_parameter('need_address_line_url')
+        need_address_line_url = self.param_manager.get_parameter('need_address_line_url', self.city_id)
         if need_address_line_url:
             if need_address_line_url.lower() in ('true', '1'):
                 need_address_line_url = True

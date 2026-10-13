@@ -15,7 +15,7 @@ from .helper.colors import css_color
 import random
 
 
-from city.models import City, city_field, city_not_all_constraint
+from city.models import City, city_field
 from place.models import Place
 from category.models import SubCategory, Category
 
@@ -122,7 +122,6 @@ class EventsNotApprovedNew(models.Model):
     city = city_field()
 
     class Meta:
-        constraints = [city_not_all_constraint()]
         indexes = [
             HnswIndex(
                 name="enapproved_new_emb_hnsw",
@@ -207,7 +206,6 @@ class EventsNotApprovedProposed(models.Model):
     city = city_field()
 
     class Meta:
-        constraints = [city_not_all_constraint()]
         indexes = [
             HnswIndex(
                 name="enapproved_prop_emb_hnsw",
@@ -307,7 +305,6 @@ class Events2Post(models.Model):  # Table events for posting
     city = city_field()
 
     class Meta:
-        constraints = [city_not_all_constraint()]
         indexes = [
             HnswIndex(
                 name="events2post_emb_hnsw",
@@ -438,9 +435,6 @@ class PostingTime(models.Model):
     posting_time = models.TimeField()
     kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=KIND_EVENT)
     city = city_field()
-
-    class Meta:
-        constraints = [city_not_all_constraint()]
 
     def __str__(self):
         time = self.posting_time.strftime("%H:%M")

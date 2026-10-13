@@ -9,6 +9,7 @@ from django.db.models.signals import post_save
 from django.test import RequestFactory, SimpleTestCase
 from django.utils import timezone
 
+from city.models import City
 from place.models import PlaceSchedule
 
 from .admin import (
@@ -96,10 +97,17 @@ class AdminHtmlTests(SimpleTestCase):
 
 @mock.patch("events.helper.load_parameters.ParametersManager")
 class PostHelperTimezoneTests(SimpleTestCase):
-    """PostHelper must always show event time in Moscow time, whatever comes in."""
+    """PostHelper must show event time in its city's time (Moscow for SPb), whatever comes in."""
 
-    def helper(self, from_date, to_date=None):
-        return PostHelper({"from_date": from_date, "to_date": to_date or from_date})
+    def setUp(self):
+        cities = {"spb": City(code="spb", timezone="Europe/Moscow"),
+                  "ekb": City(code="ekb", timezone="Asia/Yekaterinburg")}
+        patcher = mock.patch("city.models.get_cities", return_value=cities)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def helper(self, from_date, to_date=None, **extra):
+        return PostHelper({"from_date": from_date, "to_date": to_date or from_date, **extra})
 
     def assert_msk(self, value, hour):
         self.assertEqual(value.utcoffset(), MSK_OFFSET)
@@ -119,6 +127,10 @@ class PostHelperTimezoneTests(SimpleTestCase):
     def test_summer_date_has_same_offset(self, _):
         # no DST in Russia: +03:00 all year round
         self.assert_msk(self.helper("2026-07-01T16:00:00+00:00").event.from_date, 19)
+
+    def test_event_city_timezone(self, _):
+        value = self.helper("2026-10-14T16:00:00+00:00", city_id="ekb").event.from_date
+        self.assertEqual((value.utcoffset(), value.hour), (datetime.timedelta(hours=5), 21))
 
 
 class PlaceScheduleConstraintTests(SimpleTestCase):
@@ -167,3 +179,45 @@ class SummaryCacheTests(SimpleTestCase):
                 qs.return_value.filter.return_value.values.return_value.annotate.return_value.order_by.return_value = []
                 model_admin._get_category_summary(request)
             self.assertEqual(cache.get(CATEGORY_SUMMARY_CACHE_KEY.format(scope=scope, city="spb")), [])
+
+
+class ChannelApiRequestMethodTests(SimpleTestCase):
+    """Each method reaches the channel API as itself (DELETE used to go as GET)."""
+
+    def send(self, payload, status_code=200):
+        from . import utils
+
+        response = mock.Mock(status_code=status_code)
+        response.json.return_value = {"status": "revoked"}
+        senders = {
+            name: mock.patch(f"events.utils.requests.{name}", return_value=response)
+            for name in ("get", "post", "put", "patch", "delete")
+        }
+        mocks = {name: patcher.start() for name, patcher in senders.items()}
+        self.addCleanup(mock.patch.stopall)
+        result = utils.channel_api_request(payload)
+        return result, mocks
+
+    def test_delete_goes_out_as_delete(self):
+        (_, error), mocks = self.send({"api_url": "api/tasks/abc", "method": "DELETE"})
+        self.assertIsNone(error)
+        mocks["delete"].assert_called_once()
+        mocks["get"].assert_not_called()
+        self.assertNotIn("json", mocks["delete"].call_args.kwargs)
+
+    def test_post_sends_json_body(self):
+        (_, error), mocks = self.send(
+            {"api_url": "api/x", "method": "post", "data": {"ids": [1]}}
+        )
+        self.assertIsNone(error)
+        self.assertEqual(mocks["post"].call_args.kwargs["json"], {"ids": [1]})
+
+    def test_any_2xx_is_success(self):
+        (_, error), _ = self.send({"api_url": "api/x", "method": "POST"}, status_code=202)
+        self.assertIsNone(error)
+
+    def test_unknown_method_rejected_without_request(self):
+        (response, error), mocks = self.send({"api_url": "api/x", "method": "TRACE"})
+        self.assertIsNone(response)
+        self.assertIn("TRACE", error)
+        self.assertFalse(any(m.called for m in mocks.values()))

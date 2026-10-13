@@ -218,6 +218,7 @@
                 csrfmiddlewaretoken: '{{ csrf_token }}',
                 api_url: 'api/events/make_post/',
                 method: 'POST',
+                city: '{{ original.city_id|default:"" }}',
                 data: event_data,
             };
 
@@ -264,6 +265,7 @@
                 csrfmiddlewaretoken: '{{ csrf_token }}',
                 api_url: 'api/ai/update-event/',
                 method: 'POST',
+                city: '{{ original.city_id|default:"" }}',
                 data: {
                     'is_new': 0,
                     'event': event_data
@@ -334,7 +336,7 @@
                     contentType: 'application/json',
                     data: JSON.stringify({
                         csrfmiddlewaretoken: '{{ csrf_token }}',
-                        api_url: 'api/tasks/' + taskId + '/',
+                        api_url: 'api/tasks/' + taskId,
                         method: 'DELETE',
                     }),
                 });

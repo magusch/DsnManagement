@@ -50,6 +50,15 @@ def get_city(code):
     return get_cities().get(code)
 
 
+def city_timezone(code):
+    """ZoneInfo of a city; the project TIME_ZONE for an unknown code."""
+    import zoneinfo
+    from django.conf import settings
+
+    city = get_city(code)
+    return zoneinfo.ZoneInfo(city.timezone if city else settings.TIME_ZONE)
+
+
 def _invalidate_cities(**kwargs):
     cache.delete(CITIES_CACHE_KEY)
 
@@ -70,12 +79,4 @@ def city_field(default=City.SPB):
         db_default=default,
         limit_choices_to=None if default == City.ALL else ~Q(code=City.ALL),
         verbose_name='Город',
-    )
-
-
-def city_not_all_constraint():
-    """For per-city tables: a row always belongs to a real city."""
-    return models.CheckConstraint(
-        condition=~Q(city=City.ALL),
-        name='%(app_label)s_%(class)s_city_not_all',
     )

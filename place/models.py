@@ -2,7 +2,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 
-from city.models import city_field, city_not_all_constraint
+from city.models import city_field
 from events.helper.markdown_v2 import escape_v2, escape_v2_url
 
 
@@ -34,9 +34,6 @@ class Place(models.Model):
         help_text="Район как пришёл из источника. Вспомогательный сигнал для привязки к district.",
     )
     city = city_field()
-
-    class Meta:
-        constraints = [city_not_all_constraint()]
 
     def clean(self):
         if self.main_place_id and self.main_place_id == self.id:
@@ -191,7 +188,6 @@ class District(models.Model):
 
     class Meta:
         constraints = [
-            city_not_all_constraint(),
             models.UniqueConstraint(
                 fields=["name", "place_city"],
                 name="unique_district_name_city",

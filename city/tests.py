@@ -29,12 +29,20 @@ class CityFieldTests(SimpleTestCase):
                 self.assertEqual(field.default, City.ALL)
                 self.assertEqual(field.db_default, City.ALL)
 
-    def test_per_city_models_reject_all(self):
+    def test_city_check_is_db_only(self):
         for model in PER_CITY_MODELS:
             names = {c.name for c in model._meta.constraints}
-            expected = f'{model._meta.app_label}_{model._meta.model_name}_city_not_all'
             with self.subTest(model=model.__name__):
-                self.assertIn(expected, names)
+                self.assertNotIn(f'{model._meta.app_label}_{model._meta.model_name}_city_not_all', names)
+
+    def test_validate_constraints_with_embedding(self):
+        import numpy as np
+        embedding = np.array([0.1] * 1536)
+        for instance in (Events2Post(queue=1, embedding=embedding),
+                         EventsNotApprovedNew(embedding=embedding),
+                         EventsNotApprovedProposed(embedding=embedding)):
+            with self.subTest(model=type(instance).__name__):
+                instance.validate_constraints()  # must not raise
 
     def test_new_instance_gets_default_city_without_db(self):
         self.assertEqual(Events2Post(queue=1).city_id, City.SPB)
@@ -49,8 +57,8 @@ from django.test import RequestFactory
 
 from city.admin_mixins import CityScopedAdmin
 from city.context import city_from_request
-from events.utils import bot_handles_city
-from events.views import merge_city_parameters
+from events.views import add_city_to_proxy_request
+from events.helper.load_parameters import merge_city_parameters
 
 CITIES = dict.fromkeys([City.SPB, City.KZN, City.ALL])
 
@@ -127,7 +135,33 @@ class ScopedAdminTests(SimpleTestCase):
                 self.assertIsInstance(admin.site.get_model_admin(model), CityScopedAdmin)
 
 
-class BotCityTests(SimpleTestCase):
-    def test_only_spb_goes_to_bot(self):
-        self.assertTrue(bot_handles_city(City.SPB))
-        self.assertFalse(bot_handles_city(City.KZN))
+class ProxyCityTests(SimpleTestCase):
+    """Admin JS → events/channel_api/ → bot: the body gets the city."""
+
+    def proxy(self, data, city):
+        request = RequestFactory().post('/events/channel_api/')
+        request.city = city
+        return add_city_to_proxy_request(data, request)
+
+    def test_switcher_city_added_to_post_body(self):
+        data = self.proxy({'api_url': 'api/param', 'method': 'POST', 'data': {'x': 1}}, 'kzn')
+        self.assertEqual(data['data'], {'x': 1, 'city': 'kzn'})
+
+    def test_explicit_city_wins_and_is_not_forwarded_as_top_level(self):
+        data = self.proxy({'api_url': 'api/events/make_post/', 'method': 'POST',
+                           'city': 'spb', 'data': {'title': 't'}}, City.ALL)
+        self.assertEqual(data['data']['city'], 'spb')
+        self.assertNotIn('city', {k for k in data if k != 'data'})
+
+    def test_body_city_kept(self):
+        data = self.proxy({'method': 'POST', 'data': {'city': 'spb'}}, 'kzn')
+        self.assertEqual(data['data']['city'], 'spb')
+
+    def test_all_mode_without_explicit_city_adds_nothing(self):
+        data = self.proxy({'method': 'POST', 'data': {}}, City.ALL)
+        self.assertEqual(data['data'], {})
+
+    def test_get_and_delete_untouched(self):
+        for method in ('GET', 'DELETE'):
+            data = self.proxy({'api_url': 'api/tasks/1', 'method': method}, 'kzn')
+            self.assertNotIn('params', data)

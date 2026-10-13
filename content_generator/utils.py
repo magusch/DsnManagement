@@ -157,11 +157,12 @@ def generate_post(events, template):
     return "\n\n---\n\n".join(blocks)
 
 
-def event_selection_by_filter_id(filter_id):
+def event_selection_by_filter_id(filter_id, city):
+    # Themes are shared: the city says whose events to select.
     data = {
         "api_url": "api/content_generator_event_selection/",
         "method": "POST",
-        "data": {"filter_set_id": filter_id[0]}
+        "data": {"filter_set_id": filter_id[0], "city": city}
     }
 
     response, error = channel_api_request(data)
@@ -188,14 +189,14 @@ def generate_post_api(event_selection_id, template_id):
         return True
 
 
-def theme_post_api(filter_set_id=None, dry_run=False):
+def theme_post_api(city, filter_set_id=None, dry_run=False):
     """Ask the channel API to build a themed digest post.
 
     Without filter_set_id the API picks the least-recently-posted active theme.
     Returns (result_dict, error_message) — result is the raw API JSON
     (usually {'message': ..., 'task_id': ...}).
     """
-    payload = {"filter_set_id": filter_set_id, "dry_run": bool(dry_run)}
+    payload = {"filter_set_id": filter_set_id, "dry_run": bool(dry_run), "city": city}
 
     response, error = channel_api_request({
         "api_url": "api/content-generator/theme-post/",

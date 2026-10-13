@@ -17,6 +17,7 @@ from .models import EventsNotApprovedNew, EventsNotApprovedProposed, Events2Post
 
 from . import utils
 
+from .helper.load_parameters import merge_city_parameters
 from .helper.open_ai_helper import OpenAIHelper
 import threading
 from django.db import close_old_connections
@@ -213,13 +214,6 @@ def update_all(request):
     return response
 
 
-def merge_city_parameters(rows, city):
-    """A city's own rows replace the shared ('all') rows with the same (site, name)."""
-    overridden = {(r['site'], r['parameter_name']) for r in rows if r['city_id'] == city}
-    return [r for r in rows
-            if r['city_id'] == city or (r['site'], r['parameter_name']) not in overridden]
-
-
 @csrf_exempt
 @staff_member_required
 def get_parameters(request):
@@ -280,14 +274,14 @@ def remake_post(request, id=0, save=0):
 @csrf_exempt
 @staff_member_required
 def remake_post_ai(request, id=0, save=0):
-    ai = OpenAIHelper()
     if request.method == "POST":
         event_dict = dict(request.POST)
 
         for k, v in event_dict.items():
             event_dict[k] = v[0]
 
-        new_event_data = ai.new_event_data(event_dict)
+        city = event_dict.get('city_id') or event_dict.get('city') or city_from_request(request)
+        new_event_data = OpenAIHelper(city).new_event_data(event_dict)
         return HttpResponse(json.dumps([new_event_data]))
 
     if request.method == "GET" and id != 0:
@@ -303,7 +297,7 @@ def remake_post_ai(request, id=0, save=0):
         # new_post = utils.make_a_post_text(event, save)
         event = get_object_or_404(Events2Post, pk=id)
 
-        new_event_data = ai.new_event_data(event.__dict__)
+        new_event_data = OpenAIHelper(event.city_id).new_event_data(event.__dict__)
 
         return HttpResponse(json.dumps([new_event_data]))
 
@@ -334,16 +328,33 @@ def check_posts(request):
     return HttpResponse(answer)
 
 
+def add_city_to_proxy_request(data, request):
+    """Put the city into a body forwarded to the bot, unless the body has one.
+
+    Admin JS may name the city (an edit form sends its row's city — in the
+    "all cities" mode the switcher has none); otherwise the switcher's city.
+    """
+    city = data.pop('city', None) or (request.city if request.city != City.ALL else None)
+    payload = data.get('data')
+    if city and data.get('method', 'GET').upper() in ('POST', 'PUT', 'PATCH') and isinstance(payload, dict):
+        payload.setdefault('city', city)
+    return data
+
+
 @csrf_exempt
 @staff_member_required
 def proxy_request_to_channel_api(request):
     if request.method == "POST":
 
-        data = json.loads(request.body)
+        data = add_city_to_proxy_request(json.loads(request.body), request)
         response, error = utils.channel_api_request(data)
 
-        if response:
-            return JsonResponse(response.json(), status=response.status_code)
+        if response is not None:
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = {"error": error or response.text}
+            return JsonResponse(payload, status=response.status_code, safe=False)
         else:
             return JsonResponse({"error": error}, status=502)
     else:

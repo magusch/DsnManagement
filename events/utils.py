@@ -17,12 +17,6 @@ from .helper.post_helper import PostHelper
 CHANNEL_API_URL = os.environ.get("CHANNEL_API_URL")
 CHANNEL_API_TOKEN = os.environ.get("CHANNEL_API_TOKEN")
 
-def bot_handles_city(city):
-    """ChannelBot is not city-aware yet: it resolves places and prompts as SPb and
-    creates rows with the SPb default. Work for other cities stays in Django."""
-    return city == City.SPB
-
-
 _FREE_KEYWORDS = ('бесплатно', 'free', 'вход свободный', 'свободный вход', 'бесплатный')
 
 
@@ -198,12 +192,9 @@ def move_event_to_post(Events_model, city=None):
     approved = Events_model.objects.filter(approved=True)
     if city is not None:
         approved = approved.filter(city_id=city)
-    approved = list(approved)
-    if not approved:
+    events_list = list(approved)
+    if not events_list:
         return
-
-    events_list = [e for e in approved if bot_handles_city(e.city_id)]
-    local_events = [e for e in approved if not bot_handles_city(e.city_id)]
 
     payload_events = []
     for event in events_list:
@@ -211,18 +202,18 @@ def move_event_to_post(Events_model, city=None):
         event_dict['prepared_text'] = event_dict.get('post', '')
         if event.place is not None:
             event_dict['place_id'] = event.place.id
+        # The bot saves every item as its own city.
+        event_dict['city'] = event.city_id
         payload_events.append({k: _serialize_for_api(v) for k, v in event_dict.items()})
 
-    response, error = None, None
-    if payload_events:
-        response, error = channel_api_request({
-            "api_url": "api/events/bulk_create_post/",
-            "method": "POST",
-            "data": {"events": payload_events, "save": True},
-        })
+    response, error = channel_api_request({
+        "api_url": "api/events/bulk_create_post/",
+        "method": "POST",
+        "data": {"events": payload_events, "save": True},
+    })
 
-    failed_events = list(local_events)
-    if payload_events and not error:
+    failed_events = []
+    if not error:
         try:
             api_results = response.json().get('result', [])
         except Exception:
@@ -238,8 +229,8 @@ def move_event_to_post(Events_model, city=None):
 
         if saved_ids:
             Events_model.objects.filter(id__in=saved_ids).delete()
-    elif payload_events:
-        failed_events += events_list
+    else:
+        failed_events = events_list
 
     if not failed_events:
         return
@@ -378,14 +369,11 @@ def count_events_by_day(city=City.SPB):
 def make_a_post_text(event, save=0):
     remake_event_data = {}
     if type(event) == Events2Post:
-        if bot_handles_city(event.city_id):
-            response, error = channel_api_request({
-                "api_url": f"api/events/remake_post/{event.id}?save={'true' if save else 'false'}",
-                "method": "POST",
-                "data": {},
-            })
-        else:
-            response, error = None, "city is not supported by the bot"
+        response, error = channel_api_request({
+            "api_url": f"api/events/remake_post/{event.id}?save={'true' if save else 'false'}",
+            "method": "POST",
+            "data": {},
+        })
         if not error:
             result = response.json().get('result', {})
             remake_event_data['post'] = result.get('post', '')
@@ -404,14 +392,12 @@ def make_a_post_text(event, save=0):
             k: v.isoformat() if isinstance(v, (_dt.datetime, _dt.date)) else v
             for k, v in event.items() if k != 'city_id'
         }
-        if bot_handles_city(event.get('city_id', City.SPB)):
-            response, error = channel_api_request({
-                "api_url": "api/events/make_post/",
-                "method": "POST",
-                "data": serializable,
-            })
-        else:
-            response, error = None, "city is not supported by the bot"
+        serializable['city'] = event.get('city_id') or City.SPB
+        response, error = channel_api_request({
+            "api_url": "api/events/make_post/",
+            "method": "POST",
+            "data": serializable,
+        })
         if not error:
             result = response.json().get('result', {})
             remake_event_data['post'] = result.get('post', '')
@@ -436,22 +422,30 @@ def make_a_post_text(event, save=0):
     return remake_event_data
 
 
+_CHANNEL_API_METHODS = {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}
+
+
 def channel_api_request(data):
     url = CHANNEL_API_URL + data['api_url']
     headers = {
         'Authorization': f"Bearer {CHANNEL_API_TOKEN}",
     }
     method = data.get('method', 'GET').upper()
+    if method not in _CHANNEL_API_METHODS:
+        return None, f"Unsupported method {method!r}"
+
+    kwargs = {'headers': headers, 'timeout': 30}
+    if method in ('POST', 'PUT', 'PATCH'):
+        kwargs['json'] = data.get('data')
+    if data.get('params'):
+        kwargs['params'] = data['params']
 
     try:
-        if method == 'POST':
-            response = requests.post(url, headers=headers, json=data.get('data'), timeout=30)
-        else:
-            response = requests.get(url, headers=headers, timeout=30)
+        response = getattr(requests, method.lower())(url, **kwargs)
     except requests.RequestException as e:
         return None, str(e)
 
-    if response.status_code != 200:
+    if not 200 <= response.status_code < 300:
         try:
             detail = response.json().get('detail', response.text)
         except Exception:

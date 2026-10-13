@@ -90,18 +90,19 @@ FIELD_MAP = {
 
 
 class OpenAIHelper:
-    def __init__(self):
+    def __init__(self, city=City.SPB):
         self.client = OpenAI()
         self.answer = None
+        self.city = city or City.SPB
         param = ParametersManager()
-        self.system_message = param.get_parameter('openai_system_message')
-        self.user_message = param.get_parameter('openai_user_message')
-        self.openai_model = param.get_parameter('openai_model') or DEFAULT_MODEL
-        self.reasoning_effort = param.get_parameter('openai_reasoning_effort') or DEFAULT_REASONING_EFFORT
-        self.verbosity = param.get_parameter('openai_verbosity') or DEFAULT_VERBOSITY
+        self.system_message = param.get_parameter('openai_system_message', self.city)
+        self.user_message = param.get_parameter('openai_user_message', self.city)
+        self.openai_model = param.get_parameter('openai_model', self.city) or DEFAULT_MODEL
+        self.reasoning_effort = param.get_parameter('openai_reasoning_effort', self.city) or DEFAULT_REASONING_EFFORT
+        self.verbosity = param.get_parameter('openai_verbosity', self.city) or DEFAULT_VERBOSITY
 
     def refactor_post(self, event):
-        system_message = self.system_message or default_system_message(event.get('city_id'))
+        system_message = self.system_message or default_system_message(self.city)
         user_message = self.user_message or DEFAULT_USER_MESSAGE
 
         event_block = f"""
