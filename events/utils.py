@@ -165,7 +165,12 @@ def last_post_date(city=City.SPB):
 def _serialize_for_api(value):
     if isinstance(value, (datetime.datetime, datetime.date)):
         return value.isoformat()
+    if hasattr(value, 'tolist'):  # embedding comes from the DB as a numpy array
+        return value.tolist()
     return value
+
+
+SCORE_FIELDS = ["score", "score_breakdown", "embedding", "embedding_model"]
 
 
 # Move Events form not approved table to table with approved Events2Post
@@ -186,7 +191,8 @@ def move_event_to_post(Events_model, city=None):
         "explored_date",
         "from_date",
         "to_date",
-        "source"
+        "source",
+        *SCORE_FIELDS,
     ]
 
     approved = Events_model.objects.filter(approved=True)
@@ -241,6 +247,7 @@ def move_event_to_post(Events_model, city=None):
         event_dict['prepared_text'] = event_dict['post']
         event_dict['city_id'] = event.city_id
         ev = make_a_post_text(event_dict)
+        event_dict['embedding_updated_at'] = event.embedding_updated_at
         event_dict['post'] = ev['post']
         event_dict['place_id'] = ev['place'] if ev['place'] is not None else (event.place.id if event.place is not None else None)
         if 'main_category_id' in ev:
@@ -251,8 +258,8 @@ def move_event_to_post(Events_model, city=None):
         Events2Post.objects.create(
             status="ReadyToPost", post_date=post_date, queue=queue, **event_dict
         )
-
-    Events_model.objects.filter(id__in=[e.id for e in failed_events]).delete()
+        # Delete each row right after its copy exists, so a failure further on keeps the rest.
+        Events_model.objects.filter(id=event.id).delete()
 
 
 def move_event_to_site(events_model):
@@ -387,10 +394,8 @@ def make_a_post_text(event, save=0):
             remake_event_data['main_category'] = remaked_event['main_category']
         price_text = event.price
     elif type(event) == dict:
-        import datetime as _dt
         serializable = {
-            k: v.isoformat() if isinstance(v, (_dt.datetime, _dt.date)) else v
-            for k, v in event.items() if k != 'city_id'
+            k: _serialize_for_api(v) for k, v in event.items() if k != 'city_id'
         }
         serializable['city'] = event.get('city_id') or City.SPB
         response, error = channel_api_request({
