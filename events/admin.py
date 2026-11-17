@@ -1,3 +1,4 @@
+from .helper.open_ai_helper import apply_manual_transfer, parse_breakdown, editorial_adjustment
 from django.contrib import admin, messages
 from django.contrib.admin.views.main import ChangeList
 from django.utils.translation import ngettext
@@ -304,6 +305,7 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
         "change_status_to_ReadyToPost",
         "change_status_to_Spam",
         "change_status_to_OnlyApi",
+        "allow_automatic_routing",
         "mark_as_duplicate",
         'transfer_events_to_site',
         'post_date_order_by_queue',
@@ -493,8 +495,55 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
         return [status_order, "queue"]
 
 
+    def _manual_transfer(self, queryset, target):
+        from django.db import transaction
+        with transaction.atomic():
+            rows = list(queryset.select_for_update().only('id', 'status', 'score', 'score_breakdown', 'post_date'))
+            for event in rows:
+                apply_manual_transfer(event, target)
+            queryset.model.objects.bulk_update(rows, ['status', 'score', 'score_breakdown', 'post_date'])
+        return len(rows)
+
+    @admin.action(description="Разрешить автоматический выбор канала/API")
+    def allow_automatic_routing(self, request, queryset):
+        from django.db import transaction
+        with transaction.atomic():
+            rows = list(queryset.select_for_update().only('id', 'score_breakdown', 'score'))
+            for event in rows:
+                bd = dict(parse_breakdown(event.score_breakdown) or {})
+                old_adjustment = bd.get('rating_adjustment', 0)
+                bd.pop('manual_transfer', None)
+                manual = dict(bd.get('manual') or {})
+                manual.pop('target', None)
+                bd['manual'] = manual
+                bd['routing'] = {'reason': 'low_priority'}
+                adjustment = editorial_adjustment(bd)
+                if event.score is not None:
+                    bd['base_total'] = bd.get('base_total', event.score - old_adjustment)
+                    event.score = max(0, min(100, bd['base_total'] + adjustment))
+                    bd['total'] = event.score
+                bd['rating_adjustment'] = adjustment
+                event.score_breakdown = bd
+            queryset.model.objects.bulk_update(rows, ['score_breakdown', 'score'])
+        self.message_user(request, f"Автовыбор разрешён для {len(rows)} событий.")
+
+    def save_model(self, request, obj, form, change):
+        if change and 'status' in form.changed_data and obj.status in ('ReadyToPost', 'OnlyApi'):
+            apply_manual_transfer(obj, obj.status)
+        elif 'score_breakdown' in form.changed_data:
+            bd = dict(parse_breakdown(obj.score_breakdown) or {})
+            previous = parse_breakdown(Events2Post.objects.filter(pk=obj.pk).values_list('score_breakdown', flat=True).first()) or {} if change else {}
+            adjustment = editorial_adjustment(bd)
+            if obj.score is not None:
+                bd['base_total'] = bd.get('base_total', obj.score - previous.get('rating_adjustment', 0))
+                obj.score = max(0, min(100, bd['base_total'] + adjustment))
+                bd['total'] = obj.score
+            bd['rating_adjustment'] = adjustment
+            obj.score_breakdown = bd
+        super().save_model(request, obj, form, change)
+
     def change_status_to_ReadyToPost(self, request, queryset):
-        updated = queryset.update(status="ReadyToPost")
+        updated = self._manual_transfer(queryset, "ReadyToPost")
         self.message_user(
             request,
             ngettext(
@@ -520,7 +569,7 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
         )
 
     def change_status_to_OnlyApi(self, request, queryset):
-        updated = queryset.update(status="OnlyApi")
+        updated = self._manual_transfer(queryset, "OnlyApi")
         self.message_user(
             request,
             ngettext(

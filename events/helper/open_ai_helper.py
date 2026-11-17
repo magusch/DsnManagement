@@ -71,8 +71,12 @@ EVENT_JSON_SCHEMA = {
         "tags": {"type": "array", "items": {"type": "string"}},
         "address": {"type": ["string", "null"]},
         "price": {"type": ["string", "null"]},
+        "editorial": {"type": "object", "additionalProperties": False,
+                      "properties": {"score": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+                                     "reason": {"type": "string"}},
+                      "required": ["score", "reason"]},
     },
-    "required": ["title", "text", "category", "tags", "address", "price"],
+    "required": ["title", "text", "category", "tags", "address", "price", "editorial"],
 }
 
 FIELD_MAP = {
@@ -113,7 +117,7 @@ class OpenAIHelper:
 
         self.answer = self._request(
             system_message,
-            user_message + OUTPUT_INSTRUCTIONS + event_block,
+            user_message + OUTPUT_INSTRUCTIONS + EDITORIAL_INSTRUCTIONS + event_block,
         )
 
         return self.answer
@@ -203,4 +207,108 @@ class OpenAIHelper:
             if isinstance(value, list):
                 value = ', '.join(str(v) for v in value)
             ai_event[FIELD_MAP[key]] = value
-        return ai_event
+        return merge_editorial_result(event, ai_event, ai_event_data.get("editorial"))
+
+
+EDITORIAL_INSTRUCTIONS = """
+Также верни editorial: {"score": 0–100 или null, "reason": "краткое обоснование"}.
+Оцени интересность отдельного поста для местных жителей 17–29 по исходным фактам:
+соответствие аудитории, конкретная причина пойти, программа/участники/формат,
+отличие от типового предложения своей категории. Не награждай просто за концерт
+и не штрафуй просто за лекцию. Не учитывай повторно цену, источник и историю площадки.
+Не выдумывай известность артистов. 50 — обычное предложение, 75 — убедительный интерес,
+90 — выдающийся кандидат с конкретными основаниями; недостаточно данных — null.
+"""
+
+def parse_breakdown(raw):
+    """Parse a stored score_breakdown value into a dict.
+
+    Historical rows are sometimes double-encoded (a JSON string containing
+    JSON) depending on the code path that wrote them — unwrap both shapes.
+    """
+    if raw is None:
+        return None
+    value = raw
+    for _ in range(2):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                return None
+    return value if isinstance(value, dict) else None
+
+
+def rating_value(value):
+    """Accept only finite numeric ratings on the 0..100 scale."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value) if 0 <= value <= 100 else None
+
+
+def rating_bonus(value):
+    value = rating_value(value)
+    if value is None:
+        return 0
+    return -5 if value < 40 else -2 if value < 60 else 0 if value < 75 else 3 if value < 90 else 5
+
+
+def editorial_adjustment(breakdown):
+    """Small independent AI and user adjustments; never accumulate."""
+    editorial = breakdown.get('editorial') or {}
+    manual = breakdown.get('manual') or {}
+    ai = rating_bonus(editorial.get('score')) if isinstance(editorial, dict) else 0
+    user = 0
+    if isinstance(manual, dict):
+        if rating_value(manual.get('score')) is not None:
+            user = rating_bonus(manual['score'])
+        elif manual.get('target') in ('ReadyToPost', 'OnlyApi'):
+            user = 5 if manual['target'] == 'ReadyToPost' else -5
+    return ai + user
+
+
+def routing_locked(raw):
+    """Presence of a manual transfer marker excludes automatic routing."""
+    bd = parse_breakdown(raw) or {}
+    manual = bd.get('manual')
+    return 'manual_transfer' in bd or (isinstance(manual, dict) and 'target' in manual)
+
+
+def merge_editorial_result(event, answer, editorial=None):
+    """Keep trusted metadata; a model may supply only its own rating."""
+    result = dict(answer)
+    bd = dict(parse_breakdown(event.get('score_breakdown')) or {})
+    old_adjustment = editorial_adjustment(bd)
+    result.pop('editorial', None)
+    result.pop('score_breakdown', None)
+    result.pop('score', None)
+    if isinstance(editorial, dict):
+        value = rating_value(editorial.get('score'))
+        if value is not None:
+            bd['editorial'] = {'score': value, 'reason': str(editorial.get('reason') or '')[:600], 'version': 1}
+    if bd:
+        if rating_value(bd.get('total')) is not None:
+            base = bd.get('base_total', bd['total'] - bd.get('rating_adjustment', old_adjustment))
+            bd['base_total'] = base
+            bd['total'] = max(0, min(100, base + editorial_adjustment(bd)))
+            bd['rating_adjustment'] = editorial_adjustment(bd)
+            result['score'] = bd['total']
+        result['score_breakdown'] = bd
+    return result
+
+
+
+def apply_manual_transfer(event, target):
+    bd = dict(parse_breakdown(event.score_breakdown) or {})
+    old_adjustment = bd.get('rating_adjustment', 0)
+    manual = dict(bd.get('manual') or {})
+    manual['target'] = target
+    bd['manual'] = manual
+    bd['manual_transfer'] = {'target': target}
+    if event.score is not None:
+        bd['base_total'] = bd.get('base_total', event.score - old_adjustment)
+        event.score = max(0, min(100, bd['base_total'] + editorial_adjustment(bd)))
+        bd['total'] = event.score
+    bd['rating_adjustment'] = editorial_adjustment(bd)
+    event.score_breakdown = bd
+    event.status = target
+    event.post_date = None

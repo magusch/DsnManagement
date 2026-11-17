@@ -72,11 +72,11 @@
                         if (timeEl) timeEl.value = timeStr;
                     } catch (e) {
                         var el = document.getElementById('id_' + key);
-                        if (el) el.value = value;
+                        if (el) el.value = key === 'score_breakdown' && typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
                     }
                 } else {
                     var el = document.getElementById('id_' + key);
-                    if (el) el.value = value;
+                    if (el) el.value = key === 'score_breakdown' && typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
                 }
             }
             // Auto-fill price_int from price if not already in response
@@ -159,6 +159,7 @@
                 id: '{{ original.id }}',
                 place_id: document.getElementById('id_place').value,
                 main_category_id: mainCategoryEl ? mainCategoryEl.value : '',
+                score_breakdown: document.getElementById('id_score_breakdown')?.value || '{}',
                 title: document.getElementById('id_title').value,
                 full_text: document.getElementById('id_full_text').value,
                 prepared_text: document.getElementById('id_prepared_text').value,
