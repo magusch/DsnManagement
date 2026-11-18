@@ -89,7 +89,7 @@ def refresh_posting_time(self, request, queryset, city=City.SPB):
     """Use the shared planner for every city schedule refresh."""
     response, error = channel_api_request({
         'api_url': 'api/events/schedule/channel/', 'method': 'POST',
-        'params': {'city': city, 'dry_run': 'false'},
+        'params': {'city': city, 'dry_run': 'false', 'reselect': 'false'},
     })
     if error:
         raise RuntimeError(f'Channel schedule failed: {error}')
@@ -101,8 +101,20 @@ def refresh_posting_time(self, request, queryset, city=City.SPB):
 
 
 def post_date_order_by_queue(city=City.SPB):
-    """Compatibility entry point; never shuffle assigned dates separately."""
-    return refresh_posting_time(None, None, None, city=city)
+    """Explicitly apply queue order to existing dates, without AI reselection."""
+    from django.db import transaction
+    from .helper.open_ai_helper import pin_manual_schedule, manual_schedule_fits
+    with transaction.atomic():
+        rows = list(Events2Post.objects.filter(city_id=city, status='ReadyToPost', post_date__isnull=False)
+                    .select_for_update().order_by('queue', 'pk'))
+        dates = sorted(e.post_date for e in rows)
+        if any(not manual_schedule_fits(e, date) for e, date in zip(rows, dates)):
+            raise ValueError('Порядок не изменён: дата публикации вне срока мероприятия.')
+        for event, date in zip(rows, dates):
+            event.post_date = date
+            pin_manual_schedule(event)
+        Events2Post.objects.bulk_update(rows, ['post_date', 'score_breakdown'])
+    return rows
 
 
 def last_post_date(city=City.SPB):

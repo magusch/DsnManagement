@@ -1,4 +1,4 @@
-from .helper.open_ai_helper import apply_manual_transfer, parse_breakdown, editorial_adjustment
+from .helper.open_ai_helper import apply_manual_transfer, parse_breakdown, editorial_adjustment, pin_manual_schedule, manual_schedule_fits
 from django.contrib import admin, messages
 from django.contrib.admin.views.main import ChangeList
 from django.utils.translation import ngettext
@@ -513,6 +513,7 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
                 bd = dict(parse_breakdown(event.score_breakdown) or {})
                 old_adjustment = bd.get('rating_adjustment', 0)
                 bd.pop('manual_transfer', None)
+                bd.pop('manual_schedule', None)
                 manual = dict(bd.get('manual') or {})
                 manual.pop('target', None)
                 bd['manual'] = manual
@@ -540,6 +541,15 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
                 bd['total'] = obj.score
             bd['rating_adjustment'] = adjustment
             obj.score_breakdown = bd
+        if change and obj.status == 'ReadyToPost' and {'queue', 'post_date'} & set(form.changed_data):
+            if 'queue' in form.changed_data and 'post_date' not in form.changed_data:
+                slots = request.__dict__.get('_dsn_queue_slots')
+                if slots is None:
+                    slots = dict(Events2Post.objects.filter(city_id=obj.city_id, status='ReadyToPost')
+                                 .values_list('queue', 'post_date'))
+                    request._dsn_queue_slots = slots
+                obj.post_date = slots.get(obj.queue, obj.post_date)
+            pin_manual_schedule(obj)
         super().save_model(request, obj, form, change)
 
     def change_status_to_ReadyToPost(self, request, queryset):
@@ -598,25 +608,34 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
     def post_date_order_by_queue(self, request, queryset):
         city = self.collection_city(request)
         if city:
-            utils.post_date_order_by_queue(city=city)
+            try:
+                utils.post_date_order_by_queue(city=city)
+            except ValueError as error:
+                self.message_user(request, str(error), messages.ERROR)
     post_date_order_by_queue.short_description = "Post date order by queue"
     post_date_order_by_queue.acts_on_all = True
 
 
-    # Change queue of events by round (1->2, 2->3, 3->1)
+    # Rotate explicit placements from an immutable snapshot.
     def change_queue(self, request, queryset):
+        from django.db import transaction
         city = self.collection_city(request)
         if city is None:
             return
-        len_que = len(queryset)
-        for i in range(len_que):
-            u = i + 1
-            if i == (len_que - 1):
-                u = 0
-            queryset.filter(event_id=queryset[i].event_id).update(
-                queue=queryset[u].queue
-            )
-        utils.post_date_order_by_queue(city=city)
+        with transaction.atomic():
+            rows = list(queryset.filter(city_id=city).select_for_update().order_by('queue', 'pk'))
+            if len(rows) < 2 or any(e.status != 'ReadyToPost' for e in rows):
+                self.message_user(request, 'Выбери минимум два события ReadyToPost.', messages.WARNING)
+                return
+            placements = [(e.queue, e.post_date) for e in rows]
+            if any(not manual_schedule_fits(e, placements[(i + 1) % len(rows)][1]) for i, e in enumerate(rows)):
+                self.message_user(request, 'Перестановка невозможна: дата публикации вне срока мероприятия.', messages.ERROR)
+                return
+            for index, event in enumerate(rows):
+                event.queue, event.post_date = placements[(index + 1) % len(rows)]
+                pin_manual_schedule(event)
+            queryset.model.objects.bulk_update(rows, ['queue', 'post_date', 'score_breakdown'])
+        self.message_user(request, f'Позиции {len(rows)} событий переставлены и закреплены.', messages.SUCCESS)
 
     change_queue.short_description = "Change event place"
 

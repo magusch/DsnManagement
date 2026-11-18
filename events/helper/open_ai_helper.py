@@ -270,7 +270,7 @@ def routing_locked(raw):
     """Presence of a manual transfer marker excludes automatic routing."""
     bd = parse_breakdown(raw) or {}
     manual = bd.get('manual')
-    return 'manual_transfer' in bd or (isinstance(manual, dict) and 'target' in manual)
+    return 'manual_transfer' in bd or 'manual_schedule' in bd or (isinstance(manual, dict) and 'target' in manual)
 
 
 def merge_editorial_result(event, answer, editorial=None):
@@ -312,3 +312,25 @@ def apply_manual_transfer(event, target):
     event.score_breakdown = bd
     event.status = target
     event.post_date = None
+
+
+def pin_manual_schedule(event):
+    """Record an explicit placement without changing rating or status."""
+    bd = dict(parse_breakdown(event.score_breakdown) or {})
+    bd['manual_schedule'] = {'post_date': event.post_date.isoformat() if event.post_date else None,
+                             'queue': event.queue}
+    event.score_breakdown = bd
+
+
+def manual_schedule_fits(event, post_date):
+    """A manual placement must still be usable before the event ends."""
+    if post_date is None:
+        return True
+    from datetime import datetime, timezone, timedelta
+    def utc(value):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    start, stop = event.from_date, event.to_date
+    if start is None or stop is None:
+        return False
+    date, start, stop = utc(post_date), utc(start), utc(stop)
+    return date > datetime.now(timezone.utc) and date < stop and (stop-start >= timedelta(days=2) or date < start)
