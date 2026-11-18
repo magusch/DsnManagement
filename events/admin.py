@@ -54,6 +54,12 @@ def open_url(obj):
 open_url.short_description = "URL"
 
 
+
+def _locked_event_rows(queryset):
+    """Lock event rows without inherited nullable admin joins."""
+    return queryset.select_related(None).select_for_update(of=('self',))
+
+
 class FromDateFilter(admin.SimpleListFilter):
     title = 'Event Date Filter'
     parameter_name = 'from_date_field'
@@ -498,7 +504,7 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
     def _manual_transfer(self, queryset, target):
         from django.db import transaction
         with transaction.atomic():
-            rows = list(queryset.select_for_update().only('id', 'status', 'score', 'score_breakdown', 'post_date'))
+            rows = list(_locked_event_rows(queryset).only('id', 'status', 'score', 'score_breakdown', 'post_date'))
             for event in rows:
                 apply_manual_transfer(event, target)
             queryset.model.objects.bulk_update(rows, ['status', 'score', 'score_breakdown', 'post_date'])
@@ -508,7 +514,7 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
     def allow_automatic_routing(self, request, queryset):
         from django.db import transaction
         with transaction.atomic():
-            rows = list(queryset.select_for_update().only('id', 'score_breakdown', 'score'))
+            rows = list(_locked_event_rows(queryset).only('id', 'score_breakdown', 'score'))
             for event in rows:
                 bd = dict(parse_breakdown(event.score_breakdown) or {})
                 old_adjustment = bd.get('rating_adjustment', 0)
@@ -623,7 +629,7 @@ class Events2PostAdmin(CityScopedAdmin, admin.ModelAdmin):
         if city is None:
             return
         with transaction.atomic():
-            rows = list(queryset.filter(city_id=city).select_for_update().order_by('queue', 'pk'))
+            rows = list(_locked_event_rows(queryset.filter(city_id=city)).order_by('queue', 'pk'))
             if len(rows) < 2 or any(e.status != 'ReadyToPost' for e in rows):
                 self.message_user(request, 'Выбери минимум два события ReadyToPost.', messages.WARNING)
                 return

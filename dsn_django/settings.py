@@ -190,3 +190,22 @@ STORAGES = {
 
 # STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
+
+
+# Send request exceptions to container stderr even with DEBUG=False.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'request_error': {'format': '{asctime} {levelname} {name}: {message}', 'style': '{'},
+    },
+    'handlers': {
+        'request_stderr': {
+            'class': 'logging.StreamHandler', 'level': 'ERROR',
+            'formatter': 'request_error',
+        },
+    },
+    'loggers': {
+        'django.request': {'handlers': ['request_stderr'], 'level': 'ERROR', 'propagate': False},
+    },
+}

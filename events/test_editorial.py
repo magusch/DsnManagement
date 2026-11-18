@@ -55,7 +55,7 @@ class EditorialTests(SimpleTestCase):
         from events.admin import Events2PostAdmin
         event = Events2Post(queue=1, score=80, score_breakdown={'total': 80})
         queryset = Mock(model=Events2Post)
-        queryset.select_for_update.return_value.only.return_value = [event]
+        queryset.select_related.return_value.select_for_update.return_value.only.return_value = [event]
         admin = Events2PostAdmin(Events2Post, site)
         with patch('django.db.transaction.atomic'), patch.object(Events2Post.objects, 'bulk_update') as save:
             self.assertEqual(admin._manual_transfer(queryset, 'ReadyToPost'), 1)

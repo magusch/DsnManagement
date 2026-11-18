@@ -60,7 +60,7 @@ class SharedSchedulerTests(SimpleTestCase):
                 for i, q, d in [(18276, 28932, 1), (18619, 28934, 2)]]
         before = [(e.queue, e.post_date) for e in rows]
         queryset = Mock(model=Events2Post)
-        queryset.filter.return_value.select_for_update.return_value.order_by.return_value = rows
+        queryset.filter.return_value.select_related.return_value.select_for_update.return_value.order_by.return_value = rows
         admin = Events2PostAdmin(Events2Post, site)
         with patch('django.db.transaction.atomic'), \
              patch.object(admin, 'collection_city', return_value='spb'), \
