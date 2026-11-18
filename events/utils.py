@@ -86,62 +86,23 @@ def _postin_times(target_time: datetime=None):
 
 
 def refresh_posting_time(self, request, queryset, city=City.SPB):
-    """
-    Parameters
-    ----------
-    queryset : list
-        список с записями в таблице.
-
-    Returns the events whose post_date was set.
-    """
-    try:
-        body = request.body.decode('utf-8') if isinstance(request.body, bytes) else request.body
-        last_date = datetime.datetime.fromisoformat(body.strip())
-    except (ValueError, UnicodeDecodeError):
-        last_date = None
-
-    times = _postin_times(last_date)
-
-    updated = []
-    for event in queryset:
-        # if event.post_date is None:
-        #     pass
-        #
-        # else:
-        #     pass
-
-        last_post = (
-            Events2Post.objects.filter(status="ReadyToPost", city_id=city)
-            .filter(queue__lt=event.queue)
-            .order_by("-post_date")
-            .first()
-        )
-        if not last_post or not last_post.post_date:
-            last_post_time = timezone.now()
-        else:
-            last_post_time = last_post.post_date
-
-        post_time = good_post_time(last_post_time, city)
-        if post_time is None:  # no active event slots — keep the dates as they are
-            break
-        event.post_date = post_time
-        event.save()
-        updated.append(event)
-
-    return updated
+    """Use the shared planner for every city schedule refresh."""
+    response, error = channel_api_request({
+        'api_url': 'api/events/schedule/channel/', 'method': 'POST',
+        'params': {'city': city, 'dry_run': 'false'},
+    })
+    if error:
+        raise RuntimeError(f'Channel schedule failed: {error}')
+    result = response.json()
+    if result.get('skipped') not in (None, 'no_event_slots'):
+        raise RuntimeError(f"Channel schedule skipped: {result['skipped']}")
+    ids = [item['id'] for item in result.get('assignments', [])]
+    return list(Events2Post.objects.filter(id__in=ids, city_id=city).order_by('post_date'))
 
 
-# Order by queue and change post_time in this order
 def post_date_order_by_queue(city=City.SPB):
-    ready = Events2Post.objects.filter(status="ReadyToPost", city_id=city)
-    query_post_date_ordered = ready.order_by("post_date")
-    query_post_date_ordered_list = [pd.post_date for pd in query_post_date_ordered]
-    query_queue_ordered = ready.order_by("queue")
-    for i, event in enumerate(query_queue_ordered):
-
-        event.post_date = query_post_date_ordered_list[0]
-        query_post_date_ordered_list.pop(0)
-        event.save()
+    """Compatibility entry point; never shuffle assigned dates separately."""
+    return refresh_posting_time(None, None, None, city=city)
 
 
 def last_post_date(city=City.SPB):

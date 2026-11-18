@@ -196,7 +196,6 @@ def update_all(request):
             )
             _refresh_event_posting_time(ids, city)
 
-            utils.post_date_order_by_queue(city)
             utils.delete_old_events(EventsNotApprovedNew, city)
             utils.delete_old_events(EventsNotApprovedProposed, city)
             utils.delete_old_events(Events2Post, city)

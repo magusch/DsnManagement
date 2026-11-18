@@ -221,3 +221,62 @@ class ChannelApiRequestMethodTests(SimpleTestCase):
         self.assertIsNone(response)
         self.assertIn("TRACE", error)
         self.assertFalse(any(m.called for m in mocks.values()))
+
+
+class MoveEventToPostScoreTests(SimpleTestCase):
+    """Score, its breakdown and the embedding survive the move to Events2Post."""
+
+    def setUp(self):
+        import numpy as np
+
+        self.event = EventsNotApprovedNew(
+            id=7, title="t", score=42, score_breakdown={"music": 10},
+            embedding=np.array([0.5] * 1536, dtype=np.float32), embedding_model="emb-3",
+            embedding_updated_at=timezone.now(), city_id=City.SPB,
+        )
+        self.model = mock.Mock()
+        qs = self.model.objects.filter.return_value
+        qs.filter.return_value = qs
+        qs.__iter__ = lambda _: iter([self.event])
+
+    def test_bulk_create_payload_has_score_fields(self):
+        from . import utils
+
+        response = mock.Mock()
+        response.json.return_value = {"result": [{"saved": True}]}
+        with mock.patch("events.utils.channel_api_request", return_value=(response, None)) as api:
+            utils.move_event_to_post(self.model)
+        sent = api.call_args.args[0]["data"]["events"][0]
+        self.assertEqual(sent["score"], 42)
+        self.assertEqual(sent["score_breakdown"], {"music": 10})
+        self.assertEqual(sent["embedding_model"], "emb-3")
+        self.assertIsInstance(sent["embedding"], list)
+        self.assertEqual(len(sent["embedding"]), 1536)
+        self.model.objects.filter.assert_any_call(id__in=[7])
+
+    def test_fallback_create_copies_score_fields(self):
+        from . import utils
+
+        with mock.patch("events.utils.channel_api_request", return_value=(None, "down")), \
+                mock.patch("events.utils.last_post_date", return_value=(timezone.now(), 1)), \
+                mock.patch("events.utils.make_a_post_text", return_value={"post": "p", "place": None}), \
+                mock.patch.object(Events2Post.objects, "create") as create:
+            utils.move_event_to_post(self.model)
+        kwargs = create.call_args.kwargs
+        self.assertEqual(kwargs["score"], 42)
+        self.assertEqual(kwargs["score_breakdown"], {"music": 10})
+        self.assertEqual(kwargs["embedding_model"], "emb-3")
+        self.assertEqual(len(kwargs["embedding"]), 1536)
+        self.assertEqual(kwargs["embedding_updated_at"], self.event.embedding_updated_at)
+        self.model.objects.filter.assert_any_call(id=7)
+
+    def test_fallback_keeps_row_when_create_fails(self):
+        from . import utils
+
+        with mock.patch("events.utils.channel_api_request", return_value=(None, "down")), \
+                mock.patch("events.utils.last_post_date", return_value=(timezone.now(), 1)), \
+                mock.patch("events.utils.make_a_post_text", return_value={"post": "p", "place": None}), \
+                mock.patch.object(Events2Post.objects, "create", side_effect=RuntimeError):
+            with self.assertRaises(RuntimeError):
+                utils.move_event_to_post(self.model)
+        self.assertNotIn(mock.call(id=7), self.model.objects.filter.call_args_list)
