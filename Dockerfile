@@ -1,4 +1,7 @@
 FROM python:3.11
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gdal-bin \
+    && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /dsn_django

@@ -1,6 +1,8 @@
 from django.db.models import F, Value, CharField
+from django.contrib.gis.geos import Point
+from city.models import City
 
-from .models import PlaceKeyword, Place, DistrictKeyword
+from .models import PlaceKeyword, Place, District, DistrictKeyword
 
 
 def address_from_places(raw_address, city=None):
@@ -24,6 +26,16 @@ def district_from_raw(raw_district, place_city=None):
 
     match = keywords.select_related('district').first()
     return match.district if match else None
+
+
+def districts_for_coordinates(latitude, longitude, city):
+    """Return all matching districts, including boundaries, for one city."""
+    if not city or city == City.ALL:
+        raise ValueError("A specific city is required")
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise ValueError("Invalid coordinates")
+    point = Point(longitude, latitude, srid=4326)
+    return District.objects.filter(city_id=city, boundary__covers=point)
 
 
 def place_orm_object(place_id):

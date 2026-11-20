@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.gis.db import models as gis_models
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 
@@ -181,6 +182,9 @@ class PlaceKeyword(models.Model):
 
 class District(models.Model):
     name = models.CharField(max_length=200)
+    boundary = gis_models.MultiPolygonField(
+        srid=4326, null=True, blank=True, verbose_name="Граница района",
+    )
     place_city = models.CharField(
         max_length=500, default='SPb', blank=True,
     )
@@ -202,6 +206,8 @@ class District(models.Model):
     def clean(self):
         if self.parent_id and self.parent_id == self.id:
             raise ValidationError("Район не может быть собственным родителем (parent).")
+        if self.boundary is not None and (self.boundary.empty or not self.boundary.valid):
+            raise ValidationError({"boundary": "Граница района должна быть непустым корректным полигоном."})
 
     def __str__(self):
         return f"{self.name} ({self.place_city})"

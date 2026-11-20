@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.gis.admin import GISModelAdmin
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from .models import (
@@ -130,7 +131,7 @@ class DistrictKeywordInline(admin.TabularInline):
     fields = ('district_keyword',)
 
 
-class DistrictAdmin(CityScopedAdmin, admin.ModelAdmin):
+class DistrictAdmin(CityScopedAdmin, GISModelAdmin):
     list_display = ['name', 'parent']
     search_fields = ['name', 'place_city', 'keywords__district_keyword']
     autocomplete_fields = ['parent']

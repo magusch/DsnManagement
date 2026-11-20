@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.gis",
     'storages',
 ]
 
@@ -115,6 +116,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "dsn_django.wsgi.application"
 
 DATABASES = {"default": connection_url.config(DATABASE_URL)}
+DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 DATABASES["default"].update(
     CONN_MAX_AGE=60,  # reuse connections between requests (new connection costs ~2s to remote DB)
     CONN_HEALTH_CHECKS=True,  # drop a stale reused connection instead of failing the request
