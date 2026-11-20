@@ -15,6 +15,11 @@ class Place(models.Model):
     image_upload = models.ImageField(upload_to='place_images/', blank=True, null=True)
     place_metro = models.CharField(max_length=500, blank=True,)
     place_city = models.CharField(max_length=500, default='SPb', blank=True,)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    geocoding_status = models.CharField(max_length=30, null=True, blank=True)
+    geocoded_at = models.DateTimeField(null=True, blank=True)
+    geocoding_metadata = models.JSONField(null=True, blank=True)
     category = models.CharField(
         max_length=500, blank=True,
         help_text="Категория, которая присваивается всем мероприятиям этой площадки",
